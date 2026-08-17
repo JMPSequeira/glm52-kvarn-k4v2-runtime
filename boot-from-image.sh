@@ -4,9 +4,11 @@ set -euo pipefail
 ROOT=/home/js/projects/glm52-shared-h-current
 MODEL_HOME=/home/js/GLM-5.2-EXL3-TR3-3.40bpw-KVarN-K4V2
 SRC=/home/js/GLM-5.2-EXL3-TR3-3.40bpw-KVarN-K4V2-src
+HYBRID_MOE_OVERLAY=${HYBRID_MOE_OVERLAY:-}
+VLLM_ENVS_OVERLAY=${VLLM_ENVS_OVERLAY:-}
 CACHE=/home/js/.cache/vllm-glm52
-IMAGE=localhost/glm52-shared-h-mixed-mcg:r634-k34-v3-native-k5-v1
-ROUTE_PACK_OVERLAY=${ROUTE_PACK_OVERLAY-$SRC/build-exact-h16-v7/sparkinfer/moe/_shared/kernels/w4a16/route_pack.py}
+IMAGE=localhost/glm52-kvarn-k4v2:tr3
+ROUTE_PACK_OVERLAY=${ROUTE_PACK_OVERLAY:-}
 EXL3_PREFILL_CAPACITY=${EXL3_PREFILL_CAPACITY:-2048}
 EXL3_PREFILL_BLOCK_M=${EXL3_PREFILL_BLOCK_M:-32}
 EXL3_PREFILL_TILE_CONFIG=${EXL3_PREFILL_TILE_CONFIG:-}
@@ -301,12 +303,6 @@ if [[ $ENABLE_DBO == 1 ]]; then
   DBO_ARGS=(--enable-dbo)
 fi
 ROUTE_PACK_ARGS=()
-if [[ -n ${ROUTE_PACK_OVERLAY:-} ]]; then
-  ROUTE_PACK_ARGS=(
-    --volume
-    "$ROUTE_PACK_OVERLAY:/opt/venv/lib/python3.12/site-packages/sparkinfer/moe/_shared/kernels/w4a16/route_pack.py:ro"
-  )
-fi
 RUNTIME_OVERLAY_ARGS=()
 if [[ -n $PROFILER_OUTPUT ]]; then
   RUNTIME_OVERLAY_ARGS+=(
@@ -319,248 +315,199 @@ if [[ -n $PROFILER_OUTPUT ]]; then
 fi
 if [[ -n $MODEL_RUNNER_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$MODEL_RUNNER_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/v1/worker/gpu/model_runner.py:ro"
   )
 fi
 if [[ -n $WARMUP_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$WARMUP_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/v1/worker/gpu/warmup.py:ro"
   )
 fi
 if [[ -n $LOGITS_PROCESSOR_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$LOGITS_PROCESSOR_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/model_executor/layers/logits_processor.py:ro"
   )
 fi
 if [[ -n $REJECTION_SAMPLER_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$REJECTION_SAMPLER_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/v1/worker/gpu/spec_decode/rejection_sampler.py:ro"
   )
 fi
 if [[ -n $REJECTION_SAMPLER_UTILS_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$REJECTION_SAMPLER_UTILS_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/v1/worker/gpu/spec_decode/rejection_sampler_utils.py:ro"
   )
 fi
 if [[ -n $ALLREDUCE_RMS_FUSION_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$ALLREDUCE_RMS_FUSION_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/compilation/passes/fusion/allreduce_rms_fusion.py:ro"
   )
 fi
 if [[ -n $MXFP8_KERNEL_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$MXFP8_KERNEL_OVERLAY:/opt/venv/lib/python3.12/site-packages/sparkinfer/gemm/mxfp8_linear/_kernel.py:ro"
   )
 fi
 if [[ -n $PYNCCL_ALLOCATOR_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$PYNCCL_ALLOCATOR_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/distributed/device_communicators/pynccl_allocator.py:ro"
   )
 fi
 if [[ -n $ALL_REDUCE_UTILS_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$ALL_REDUCE_UTILS_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/distributed/device_communicators/all_reduce_utils.py:ro"
   )
 fi
 if [[ -n $MIXED_TRELLIS_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$MIXED_TRELLIS_OVERLAY:/opt/venv/lib/python3.12/site-packages/sparkinfer/moe/_shared/kernels/w4a16/mixed_trellis.py:ro"
   )
 fi
 if [[ -n $WORKSPACE_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$WORKSPACE_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/v1/worker/workspace.py:ro"
   )
 fi
 if [[ -n $B12X_MLA_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$B12X_MLA_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/v1/attention/backends/mla/b12x_mla_sparse.py:ro"
   )
 fi
 if [[ -n $MLA_ATTENTION_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$MLA_ATTENTION_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/model_executor/layers/attention/mla_attention.py:ro"
   )
 fi
 if [[ -n $SPARKINFER_BMM_API_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$SPARKINFER_BMM_API_OVERLAY:/opt/venv/lib/python3.12/site-packages/sparkinfer/gemm/_bmm/api.py:ro"
   )
 fi
 if [[ -n $SPARKINFER_BF16_BMM_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$SPARKINFER_BF16_BMM_OVERLAY:/opt/venv/lib/python3.12/site-packages/sparkinfer/gemm/_shared/bf16_bmm.py:ro"
   )
 fi
 if [[ -n $SPARSE_UTILS_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$SPARSE_UTILS_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/v1/attention/backends/mla/sparse_utils.py:ro"
   )
 fi
 if [[ -n $SPARSE_ATTN_INDEXER_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$SPARSE_ATTN_INDEXER_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/model_executor/layers/sparse_attn_indexer.py:ro"
   )
 fi
 if [[ -n $DCP_INDEXER_CUTEDSL_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$DCP_INDEXER_CUTEDSL_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/model_executor/kernels/attention/dsa/dcp_indexer_cutedsl.py:ro"
   )
 fi
 if [[ -n $FUSED_INDEXER_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$FUSED_INDEXER_OVERLAY:/opt/venv/lib/python3.12/site-packages/sparkinfer/attention/nsa_indexer/fused_indexer.py:ro"
   )
 fi
 if [[ -n $TILED_TOPK_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$TILED_TOPK_OVERLAY:/opt/venv/lib/python3.12/site-packages/sparkinfer/attention/nsa_indexer/tiled_topk.py:ro"
   )
 fi
 if [[ -n $FLASHINFER_TOPK_HEADER_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$FLASHINFER_TOPK_HEADER_OVERLAY:/opt/venv/lib/python3.12/site-packages/flashinfer/data/include/flashinfer/topk.cuh:ro"
     --env FLASHINFER_WORKSPACE_BASE=/cache/flashinfer-sm120
   )
 fi
 if [[ -n $GLM_TARGET_MODEL_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$GLM_TARGET_MODEL_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/model_executor/models/deepseek_v2.py:ro"
   )
 fi
 if [[ -n $KVARN_MLA_OPS_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$KVARN_MLA_OPS_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/v1/attention/ops/kvarn_mla.py:ro"
   )
 fi
 if [[ -n $KVARN_CONFIG_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$KVARN_CONFIG_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/model_executor/layers/quantization/kvarn/config.py:ro"
   )
 fi
 if [[ -n $KVARN_NATIVE_API_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$KVARN_NATIVE_API_OVERLAY:/opt/venv/lib/python3.12/site-packages/sparkinfer/attention/kvarn_mla/api.py:ro"
   )
 fi
 if [[ -n $KVARN_NATIVE_IO_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$KVARN_NATIVE_IO_OVERLAY:/opt/venv/lib/python3.12/site-packages/sparkinfer/attention/kvarn_mla/io.py:ro"
   )
 fi
 if [[ -n $KVARN_NATIVE_KERNEL_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$KVARN_NATIVE_KERNEL_OVERLAY:/opt/venv/lib/python3.12/site-packages/sparkinfer/attention/_shared/mla/kernel.py:ro"
   )
 fi
 if [[ -n $HYBRID_MOE_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$HYBRID_MOE_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/model_executor/layers/quantization/nvfp4_nf3_hybrid.py:ro"
   )
 fi
 if [[ -n $VLLM_ENVS_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$VLLM_ENVS_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/envs.py:ro"
   )
 fi
 if [[ -n $V1_MODEL_RUNNER_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$V1_MODEL_RUNNER_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/v1/worker/gpu_model_runner.py:ro"
   )
 fi
 if [[ -n $KVARN_MLA_STATE_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$KVARN_MLA_STATE_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/v1/attention/backends/mla/kvarn_mla_state.py:ro"
   )
 fi
 if [[ -n $KVARN_SINKHORN_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$KVARN_SINKHORN_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/v1/attention/ops/triton_kvarn_sinkhorn.py:ro"
   )
 fi
 if [[ -n $KV_CACHE_UTILS_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$KV_CACHE_UTILS_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/v1/core/kv_cache_utils.py:ro"
   )
 fi
 if [[ -n $CACHE_CONFIG_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$CACHE_CONFIG_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/config/cache.py:ro"
   )
 fi
 if [[ -n $VLLM_CONFIG_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$VLLM_CONFIG_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/config/vllm.py:ro"
   )
 fi
 if [[ -n $TORCH_UTILS_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$TORCH_UTILS_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/utils/torch_utils.py:ro"
   )
 fi
 if [[ -n $SPEC_CONFIG_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$SPEC_CONFIG_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/config/speculative.py:ro"
   )
 fi
 if [[ -n $EAGLE_UTILS_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$EAGLE_UTILS_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/v1/worker/gpu/spec_decode/eagle/utils.py:ro"
   )
 fi
 if [[ -n $FLASH_ATTN_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$FLASH_ATTN_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/v1/attention/backends/flash_attn.py:ro"
   )
 fi
 if [[ -n $FLEX_ATTN_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$FLEX_ATTN_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/v1/attention/backends/flex_attention.py:ro"
   )
 fi
 if [[ -n $DFLASH_CUDAGRAPH_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$DFLASH_CUDAGRAPH_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/v1/worker/gpu/spec_decode/dflash/cudagraph.py:ro"
   )
 fi
 if [[ -n $ATTN_UTILS_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$ATTN_UTILS_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/v1/worker/gpu/attn_utils.py:ro"
   )
 fi
 if [[ -n $KV_CACHE_INTERFACE_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$KV_CACHE_INTERFACE_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/v1/kv_cache_interface.py:ro"
   )
 fi
 if [[ -n $DSPARK_UTILS_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$DSPARK_UTILS_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/v1/worker/gpu/spec_decode/dspark/utils.py:ro"
   )
 fi
 if [[ -n $GLM_DSPARK_MODEL_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$GLM_DSPARK_MODEL_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/models/deepseek_v4/nvidia/dspark.py:ro"
   )
 fi
 if [[ -n $QWEN3_DFLASH_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$QWEN3_DFLASH_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/model_executor/models/qwen3_dflash.py:ro"
   )
 fi
 if [[ -n $SPECULATORS_ALGOS_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$SPECULATORS_ALGOS_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/transformers_utils/configs/speculators/algos.py:ro"
   )
 fi
 if [[ -n $DFLASH_SPECULATOR_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$DFLASH_SPECULATOR_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/v1/worker/gpu/spec_decode/dflash/speculator.py:ro"
   )
 fi
 if [[ -n $DSPARK_SPECULATOR_OVERLAY ]]; then
   RUNTIME_OVERLAY_ARGS+=(
-    --volume "$DSPARK_SPECULATOR_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/v1/worker/gpu/spec_decode/dspark/speculator.py:ro"
   )
 fi
 NGRAM_ENV_ARGS=()
@@ -581,7 +528,6 @@ if [[ $DSPARK_NGRAM_ASSIST == 1 ]]; then
   fi
   if [[ -n $DSPARK_NGRAM_ASSIST_OVERLAY ]]; then
     RUNTIME_OVERLAY_ARGS+=(
-      --volume "$DSPARK_NGRAM_ASSIST_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/v1/worker/gpu/spec_decode/dspark/ngram_assist.py:ro"
     )
   fi
 fi
@@ -608,12 +554,10 @@ if ((MTP_TABLE_EXTENSION > 0)); then
   fi
   if [[ -n $MTP_TABLE_SPECULATOR_OVERLAY ]]; then
     RUNTIME_OVERLAY_ARGS+=(
-      --volume "$MTP_TABLE_SPECULATOR_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/v1/worker/gpu/spec_decode/mtp/speculator.py:ro"
     )
   fi
   if [[ -n $MTP_TABLE_EXTENSION_OVERLAY ]]; then
     RUNTIME_OVERLAY_ARGS+=(
-      --volume "$MTP_TABLE_EXTENSION_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/v1/worker/gpu/spec_decode/mtp/table_extension.py:ro"
     )
   fi
 fi
@@ -626,8 +570,6 @@ if [[ -n $PROMPT_LOGITS_PLAN ]]; then
   RUNTIME_OVERLAY_ARGS+=(
     --volume "$PROMPT_LOGITS_PLAN:/capture-plan.json:ro"
     --volume "$PROMPT_LOGITS_OUTPUT:/capture-output"
-    --volume "$PROMPT_LOGITS_CAPTURE_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/v1/worker/gpu/item13_prompt_logits.py:ro"
-    --volume "$PROMPT_LOGPROB_OVERLAY:/opt/venv/lib/python3.12/site-packages/vllm/v1/worker/gpu/sample/prompt_logprob.py:ro"
     --env GLM_ITEM13_PROMPT_LOGITS_PLAN=/capture-plan.json
     --env GLM_ITEM13_PROMPT_LOGITS_PLAN_SHA256="$PROMPT_LOGITS_PLAN_SHA256"
     --env GLM_ITEM13_PROMPT_LOGITS_DIR=/capture-output
@@ -649,10 +591,6 @@ exec podman run --rm --pull=never --replace \
   --volume "$MODEL_TARGET:/model:ro" \
   --volume "$MODEL_HOME/mtp:/mtp:ro" \
   $([[ -e ${SPEC_MODEL:-} ]] && echo --volume "${SPEC_MODEL}:/spec-model:ro") \
-  --volume "$SRC/r634-prefix-overlays/vllm/platforms/cuda.py:/opt/venv/lib/python3.12/site-packages/vllm/platforms/cuda.py:ro" \
-  --volume "$SRC/r634-mtp-overlays/vllm/v1/attention/backends/mla/indexer.py:/opt/venv/lib/python3.12/site-packages/vllm/v1/attention/backends/mla/indexer.py:ro" \
-  --volume "$SRC/build-exact-h16-v7/vllm/model_executor/layers/quantization/exl3.py:/opt/venv/lib/python3.12/site-packages/vllm/model_executor/layers/quantization/exl3.py:ro" \
-  --volume "$SRC/build-exact-h16-v1/vllm/v1/attention/ops/dcp_alltoall.py:/opt/venv/lib/python3.12/site-packages/vllm/v1/attention/ops/dcp_alltoall.py:ro" \
   "${ROUTE_PACK_ARGS[@]}" \
   "${RUNTIME_OVERLAY_ARGS[@]}" \
   --volume "$CACHE:/cache" \
