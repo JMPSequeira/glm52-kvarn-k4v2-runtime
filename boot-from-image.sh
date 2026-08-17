@@ -272,7 +272,7 @@ else
   fi
   SPECULATIVE_ARGS=(
     --speculative-config
-    "{\"attention_backend\":\"B12X_MLA_SPARSE\",\"draft_sample_method\":\"$MTP_DRAFT_SAMPLE_METHOD\",\"method\":\"mtp\",\"model\":\"/mtp\",\"moe_backend\":\"b12x\",\"num_speculative_tokens\":$MTP_SPEC_TOKENS$MTP_LOCAL_ARGMAX_JSON$MTP_SPEC_PER_BATCH_JSON}"
+    "{\"attention_backend\":\"B12X_MLA_SPARSE\",\"draft_sample_method\":\"$MTP_DRAFT_SAMPLE_METHOD\",\"method\":\"mtp\",\"model\":\"/model/mtp\",\"moe_backend\":\"b12x\",\"num_speculative_tokens\":$MTP_SPEC_TOKENS$MTP_LOCAL_ARGMAX_JSON$MTP_SPEC_PER_BATCH_JSON}"
   )
   EXL3_TRELLIS_MAX_M=${EXL3_TRELLIS_MAX_M:-$((MTP_SPEC_TOKENS + 1))}
 fi
@@ -589,7 +589,6 @@ exec podman run --rm --pull=never --replace \
   --device nvidia.com/gpu=0 --device nvidia.com/gpu=1 \
   --device nvidia.com/gpu=2 --device nvidia.com/gpu=3 \
   --volume "$MODEL_TARGET:/model:ro" \
-  --volume "$MODEL_HOME/mtp:/mtp:ro" \
   $([[ -e ${SPEC_MODEL:-} ]] && echo --volume "${SPEC_MODEL}:/spec-model:ro") \
   "${ROUTE_PACK_ARGS[@]}" \
   "${RUNTIME_OVERLAY_ARGS[@]}" \
