@@ -1,0 +1,32 @@
+FROM localhost/glm52-shared-h-foundation:r634-sharedh-v2
+COPY --from=vllm_active vllm/model_executor/layers/quantization/exl3.py /tmp/exl3.py
+COPY --from=sparkinfer sparkinfer/moe/_shared/kernels/w4a16/host.py /tmp/host.py
+COPY --from=sparkinfer sparkinfer/moe/_shared/kernels/w4a16/kernel.py /tmp/kernel.py
+COPY --from=sparkinfer sparkinfer/moe/_shared/kernels/w4a16/prepare.py /tmp/prepare.py
+COPY --from=sparkinfer sparkinfer/moe/_shared/kernels/w4a16/route_pack.py /tmp/route_pack.py
+COPY --from=sparkinfer sparkinfer/moe/_shared/kernels/w4a16/mixed_trellis.py /tmp/mixed_trellis.py
+COPY --from=sparkinfer sparkinfer/_lib/intrinsics.py /tmp/intrinsics.py
+COPY --from=sparkinfer sparkinfer/moe/_shared/kernels/activations.py /tmp/activations.py
+COPY --from=sparkinfer sparkinfer/moe/_shared/kernels/micro.py /tmp/micro.py
+RUN set -eux; \
+    vllm_pkg=/opt/venv/lib/python3.12/site-packages/vllm; \
+    spark_pkg=/opt/venv/lib/python3.12/site-packages/sparkinfer/moe/_shared/kernels/w4a16; \
+    install -m 0644 /tmp/exl3.py "$vllm_pkg/model_executor/layers/quantization/exl3.py"; \
+    install -m 0644 /tmp/host.py "$spark_pkg/host.py"; \
+    install -m 0644 /tmp/kernel.py "$spark_pkg/kernel.py"; \
+    install -m 0644 /tmp/prepare.py "$spark_pkg/prepare.py"; \
+    install -m 0644 /tmp/route_pack.py "$spark_pkg/route_pack.py"; \
+    install -m 0644 /tmp/mixed_trellis.py "$spark_pkg/mixed_trellis.py"; \
+    install -m 0644 /tmp/intrinsics.py /opt/venv/lib/python3.12/site-packages/sparkinfer/_lib/intrinsics.py; \
+    install -m 0644 /tmp/activations.py /opt/venv/lib/python3.12/site-packages/sparkinfer/moe/_shared/kernels/activations.py; \
+    install -m 0644 /tmp/micro.py /opt/venv/lib/python3.12/site-packages/sparkinfer/moe/_shared/kernels/micro.py; \
+    rm -f /tmp/exl3.py /tmp/host.py /tmp/kernel.py /tmp/prepare.py \
+        /tmp/route_pack.py /tmp/mixed_trellis.py /tmp/intrinsics.py \
+        /tmp/activations.py /tmp/micro.py; \
+    /opt/venv/bin/python -m py_compile \
+        /opt/venv/lib/python3.12/site-packages/sparkinfer/_lib/intrinsics.py \
+        "$vllm_pkg/model_executor/layers/quantization/exl3.py" \
+        "$spark_pkg/host.py" "$spark_pkg/kernel.py" "$spark_pkg/prepare.py" \
+        /opt/venv/lib/python3.12/site-packages/sparkinfer/moe/_shared/kernels/activations.py \
+        /opt/venv/lib/python3.12/site-packages/sparkinfer/moe/_shared/kernels/micro.py \
+        "$spark_pkg/route_pack.py" "$spark_pkg/mixed_trellis.py"

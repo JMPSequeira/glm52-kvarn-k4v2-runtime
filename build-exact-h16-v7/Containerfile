@@ -1,0 +1,4 @@
+FROM localhost/glm52-shared-h-mixed-mcg:r634-k34-v3
+
+COPY vllm/ /opt/venv/lib/python3.12/site-packages/vllm/
+COPY sparkinfer/ /opt/venv/lib/python3.12/site-packages/sparkinfer/

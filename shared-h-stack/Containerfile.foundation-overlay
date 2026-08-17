@@ -1,0 +1,10 @@
+FROM localhost/glm52-exl3-mixed:kvarn-stage-selector-32a4a5a-pbd04d715-r634
+
+COPY --from=vllm_active vllm/model_executor/layers/quantization/exl3.py /opt/venv/lib/python3.12/site-packages/vllm/model_executor/layers/quantization/exl3.py
+
+RUN /opt/venv/bin/python -m py_compile \
+    /opt/venv/lib/python3.12/site-packages/vllm/model_executor/layers/quantization/exl3.py
+
+LABEL local-inference.shared-h-stack-manifest-sha256="b8267fa84ff9be02291e1cf6f19750b5b49479983233796cb74ac50d97afa3d3" \
+      local-inference.exl3-loader-sha256="e26da38c9ae156423b5c7969c0b1764ec5f7512d6d314901b4c185cff873584f" \
+      local-inference.shared-h-runtime-strategy="single-graph-stable-expanded-h-arena"
