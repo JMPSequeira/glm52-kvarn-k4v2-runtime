@@ -66,3 +66,4 @@ COPY projects/optimize-vllm/vllm/distributed/device_communicators/all_reduce_uti
 COPY projects/optimize-vllm/vllm/distributed/device_communicators/pynccl_allocator.py /opt/venv/lib/python3.12/site-packages/vllm/distributed/device_communicators/pynccl_allocator.py
 COPY projects/optimize-vllm/vllm/v1/worker/gpu/attn_utils.py /opt/venv/lib/python3.12/site-packages/vllm/v1/worker/gpu/attn_utils.py
 COPY projects/optimize-vllm/vllm/v1/kv_cache_interface.py /opt/venv/lib/python3.12/site-packages/vllm/v1/kv_cache_interface.py
+COPY projects/optimize-vllm/vllm/model_executor/models/deepseek_mtp.py /opt/venv/lib/python3.12/site-packages/vllm/model_executor/models/deepseek_mtp.py
