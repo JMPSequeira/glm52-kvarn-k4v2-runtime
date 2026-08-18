@@ -2,7 +2,8 @@
 set -euo pipefail
 
 ROOT=/home/js/projects/glm52-shared-h-current
-MODEL_HOME=/home/js/GLM-5.2-EXL3-TR3-3.40bpw-KVarN-K4V2
+MODEL_ID=jpsequeira/GLM-5.2-EXL3-TR3-3.40bpw-KVarN-K4V2
+HF_HOME_HOST=${HF_HOME_HOST:-/home/js/.cache/huggingface}
 SRC=/home/js/GLM-5.2-EXL3-TR3-3.40bpw-KVarN-K4V2-src
 HYBRID_MOE_OVERLAY=${HYBRID_MOE_OVERLAY:-}
 VLLM_ENVS_OVERLAY=${VLLM_ENVS_OVERLAY:-}
@@ -32,7 +33,6 @@ CUDAGRAPH_CAPTURE_SIZES=${CUDAGRAPH_CAPTURE_SIZES:-}
 B12X_MOE_DECODE_M=${B12X_MOE_DECODE_M:-0}
 PCIE_ONESHOT_ALLREDUCE_MAX=${PCIE_ONESHOT_ALLREDUCE_MAX:-84KB}
 PCIE_ONESHOT_FUSED_MAX=${PCIE_ONESHOT_FUSED_MAX:-84KB}
-MODEL_TARGET=${MODEL_TARGET:-$MODEL_HOME}
 ESTIMATE_CUDAGRAPHS=${ESTIMATE_CUDAGRAPHS:-1}
 SPEC_METHOD=${SPEC_METHOD:-mtp}
 SPEC_MODEL=${SPEC_MODEL:-}
@@ -591,13 +591,13 @@ exec podman run --rm --pull=never --replace \
   --ulimit memlock=-1:-1 --ulimit stack=67108864:67108864 \
   --device nvidia.com/gpu=0 --device nvidia.com/gpu=1 \
   --device nvidia.com/gpu=2 --device nvidia.com/gpu=3 \
-  --volume "$MODEL_TARGET:/model:ro" \
+  --volume "$HF_HOME_HOST:/hf-cache:ro" \
   $([[ -e ${SPEC_MODEL:-} ]] && echo --volume "${SPEC_MODEL}:/spec-model:ro") \
   "${ROUTE_PACK_ARGS[@]}" \
   "${RUNTIME_OVERLAY_ARGS[@]}" \
   --volume "$CACHE:/cache" \
   --env CUDA_VISIBLE_DEVICES=0,1,2,3 \
-  --env HF_HUB_OFFLINE=1 --env TRANSFORMERS_OFFLINE=1 \
+  --env HF_HUB_OFFLINE=1 --env TRANSFORMERS_OFFLINE=1 --env HF_HUB_CACHE=/hf-cache/hub \
   --env MAX_JOBS=4 --env MAX_WORKERS=4 \
   --env OMP_NUM_THREADS=8 --env MKL_NUM_THREADS=8 --env NUMEXPR_MAX_THREADS=8 \
   --env VLLM_WORKER_MULTIPROC_METHOD=spawn \
@@ -685,7 +685,7 @@ exec podman run --rm --pull=never --replace \
   --env FLASHINFER_WORKSPACE_BASE=/cache/full-expert-335-b12x-query/flashinfer_workspace \
   --entrypoint /opt/venv/bin/python \
   "$IMAGE" -m vllm.entrypoints.openai.api_server \
-  --model /model \
+  --model $MODEL_ID \
   --served-model-name GLM-5.2 \
   --host 0.0.0.0 --port 8001 \
   --tensor-parallel-size 4 \
