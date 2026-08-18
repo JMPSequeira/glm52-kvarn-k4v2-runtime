@@ -21,7 +21,6 @@ NUM_GPU_BLOCKS=${NUM_GPU_BLOCKS:-2000}
 TARGET_ATTENTION_BACKEND=${TARGET_ATTENTION_BACKEND:-B12X_MLA_SPARSE}
 TARGET_KV_CACHE_DTYPE=${TARGET_KV_CACHE_DTYPE:-kvarn_mla_k4_g64}
 MTP=${MTP:-3}
-MTP_DRAFT_DIR=${MTP_DRAFT_DIR:-/model/mtp}
 KVARN_NATIVE_CKV_GATHER=${KVARN_NATIVE_CKV_GATHER:-0}
 KVARN_FUSED_CURRENT_STAGE=${KVARN_FUSED_CURRENT_STAGE:-0}
 MTP_FUSED_TRAILING_AR=${MTP_FUSED_TRAILING_AR:-0}
@@ -271,9 +270,12 @@ else
     MTP_SPEC_TOKENS=$MTP
     CUDAGRAPH_CAPTURE_SIZES=${CUDAGRAPH_CAPTURE_SIZES:-4,1}
   fi
+  # Natural MTP: the draft head builds from the target checkpoint itself
+  # (speculative.py resolves method=mtp + no model to the target model), so
+  # layer-78 weights ship inside the main checkpoint index. No draft dir.
   SPECULATIVE_ARGS=(
     --speculative-config
-    "{\"attention_backend\":\"B12X_MLA_SPARSE\",\"draft_sample_method\":\"$MTP_DRAFT_SAMPLE_METHOD\",\"method\":\"mtp\",\"model\":\"$MTP_DRAFT_DIR\",\"moe_backend\":\"b12x\",\"num_speculative_tokens\":$MTP_SPEC_TOKENS$MTP_LOCAL_ARGMAX_JSON$MTP_SPEC_PER_BATCH_JSON}"
+    "{\"attention_backend\":\"B12X_MLA_SPARSE\",\"draft_sample_method\":\"$MTP_DRAFT_SAMPLE_METHOD\",\"method\":\"mtp\",\"moe_backend\":\"b12x\",\"num_speculative_tokens\":$MTP_SPEC_TOKENS$MTP_LOCAL_ARGMAX_JSON$MTP_SPEC_PER_BATCH_JSON}"
   )
   EXL3_TRELLIS_MAX_M=${EXL3_TRELLIS_MAX_M:-$((MTP_SPEC_TOKENS + 1))}
 fi
