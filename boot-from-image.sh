@@ -4,6 +4,8 @@ set -euo pipefail
 ROOT=/home/js/projects/glm52-shared-h-current
 MODEL_ID=jpsequeira/GLM-5.2-EXL3-TR3-3.40bpw-KVarN-K4V2
 HF_HOME_HOST=${HF_HOME_HOST:-/home/js/.cache/huggingface}
+CONTAINER_NAME=${CONTAINER_NAME:-glm52-full-expert-production}
+PORT=${PORT:-8001}
 SRC=/home/js/GLM-5.2-EXL3-TR3-3.40bpw-KVarN-K4V2-src
 HYBRID_MOE_OVERLAY=${HYBRID_MOE_OVERLAY:-}
 VLLM_ENVS_OVERLAY=${VLLM_ENVS_OVERLAY:-}
@@ -286,8 +288,12 @@ elif ((MTP > 0)); then
 else
   B12X_SPEC_DECODE_MAX_Q=${B12X_SPEC_DECODE_MAX_Q:-1}
 fi
-PREFIX_CACHING_ARGS=(--no-enable-prefix-caching)
-if [[ $ENABLE_PREFIX_CACHING == 1 ]]; then
+# Single source of truth: DISABLE_PREFIX_CACHING. (Two gates previously
+# fought: SCHEDULER_ARGS honored DISABLE while this later array defaulted
+# to no-prefix-caching and overrode it — last argparse flag wins.)
+if (( DISABLE_PREFIX_CACHING )); then
+  PREFIX_CACHING_ARGS=(--no-enable-prefix-caching)
+else
   PREFIX_CACHING_ARGS=(--enable-prefix-caching)
 fi
 ALLREDUCE_ARGS=()
@@ -585,7 +591,7 @@ if [[ -n $PROMPT_LOGITS_PLAN ]]; then
 fi
 
 exec podman run --rm --pull=never --replace \
-  --name glm52-full-expert-production \
+  --name "$CONTAINER_NAME" \
   --network host --ipc host --security-opt label=disable \
   --pids-limit 4096 \
   --ulimit memlock=-1:-1 --ulimit stack=67108864:67108864 \
@@ -687,7 +693,7 @@ exec podman run --rm --pull=never --replace \
   "$IMAGE" -m vllm.entrypoints.openai.api_server \
   --model $MODEL_ID \
   --served-model-name GLM-5.2 \
-  --host 0.0.0.0 --port 8001 \
+  --host 0.0.0.0 --port "$PORT" \
   --tensor-parallel-size 4 \
   --decode-context-parallel-size "$DCP_SIZE" \
   --dcp-comm-backend a2a \
