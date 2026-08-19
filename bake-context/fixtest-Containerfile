@@ -1,0 +1,2 @@
+FROM localhost/glm52-kvarn-k4v2:tr3
+COPY b12x_mla_sparse_fixed.py /opt/venv/lib/python3.12/site-packages/vllm/v1/attention/backends/mla/b12x_mla_sparse.py

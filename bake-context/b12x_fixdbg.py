@@ -2723,6 +2723,24 @@ class B12xMLASparseImpl(MLAAttentionImpl[B12xMLASparseMetadata]):
         assert self._kvarn_config is not None
         from vllm.v1.attention.ops.kvarn_mla import pack_kvarn_mla_blocks
 
+        if os.path.exists('/tmp/KVARN_DBG_APC'):
+            _ps = pool_slots.to(torch.long)
+            _pl = self._kvarn_latent_pool.view(torch.int16).reshape(-1)
+            _chunks = []
+            for _s in _ps.tolist()[:8]:
+                _off = _s * self._kvarn_config.group * self._kvarn_config.latent_dim // 2
+                _row = _pl[_off : _off + 512].to(torch.int64)
+                _chunks.append(int(_row.sum().item()))
+            _rec = self._kvarn_cache_ref.view(torch.int16).reshape(-1)
+            _rb = block_ids.to(torch.long).tolist()[:8]
+            _rsums = []
+            for _b in _rb:
+                _off = int(_b) * self._kvarn_cache_ref.stride(0) // 2
+                _rsums.append(int(_rec[_off : _off + 2048].to(torch.int64).sum().item()))
+            logger.warning(
+                'APCDBG flush blocks=%s slots=%s pool_row_sums=%s rec_sums_pre=%s',
+                _rb, _ps.tolist()[:8], _chunks, _rsums,
+            )
         pack_kvarn_mla_blocks(
             self._kvarn_cache_ref,
             self._kvarn_latent_pool,
@@ -4428,6 +4446,20 @@ class B12xMLASparseImpl(MLAAttentionImpl[B12xMLASparseMetadata]):
             )
         layer_idx = self._resolve_layer_index(layer)
         prefetch_registry = attn_metadata.ckv_prefetch_registry
+        if (
+            os.path.exists('/tmp/KVARN_DBG_APC')
+            and layer_idx == 0
+            and self._is_kvarn_mla
+        ):
+            _kb = kv_c_and_k_pe_cache.view(torch.int16).reshape(-1)[
+                : 16 * (kv_c_and_k_pe_cache.stride(0) // 2)
+            ]
+            logger.warning(
+                'APCDBG blocks L=0 q=%d sum=%d abs=%d',
+                int(attn_metadata.num_actual_tokens),
+                int(_kb.to(torch.int64).sum().item()),
+                int(_kb.to(torch.int64).abs().sum().item()),
+            )
         if (
             self._ckv_gather_enabled
             and self._ckv_prefetch_depth > 0

@@ -73,6 +73,25 @@ if TYPE_CHECKING:
     from vllm.model_executor.models.deepseek_v2 import Indexer
 
 logger = init_logger(__name__)
+
+def _apc_dbg() -> bool:
+    import os as _o
+
+    try:
+        return _o.path.exists("/tmp/KVARN_DBG_APC")
+    except Exception:
+        return False
+
+
+_APC_N = 0
+
+
+def _apc_layer_gate() -> bool:
+    global _APC_N
+    _APC_N += 1
+    return _APC_N % 61 == 1
+
+
 _CKV_POOL_STATE_ENABLED = os.getenv("VLLM_B12X_CKV_POOL_STATE", "0") == "1"
 _KVARN_FUSED_CURRENT_STAGE_ENABLED = (
     os.getenv("VLLM_KVARN_MLA_FUSED_CURRENT_STAGE", "0") == "1"
@@ -3729,6 +3748,27 @@ class B12xMLASparseImpl(MLAAttentionImpl[B12xMLASparseMetadata]):
                         self._kvarn_rope_pool,
                         local_buffer[:local_tokens],
                     )
+                    if _apc_dbg() and os.path.exists('/tmp/KVARN_DBG_EVERY'):
+                        _lb = local_buffer.view(torch.int16).reshape(-1)
+                        _n = min(8192, _lb.numel())
+                        logger.warning(
+                            'APCDBG locstage L=%d R=%d stream=%d lt=%d sum=%d abs=%d',
+                            getattr(self, '_apc_lidx', -1), self.dcp_rank,
+                            1 if stream is not None else 0, int(local_tokens),
+                            int(_lb[:_n].to(torch.int64).sum().item()),
+                            int(_lb[:_n].to(torch.int64).abs().sum().item()),
+                        )
+                    if _apc_dbg() and getattr(self, '_apc_lidx', -1) >= 0 and self._apc_lidx % 4 == 0:
+                        _n = min(512, local_tokens)
+                        _slots = compact_slots[:_n].to(torch.int64)
+                        _rows = local_buffer[:_n].view(torch.int16).to(torch.int64)
+                        logger.warning(
+                            'APCDBG gather L=%d R=%d q=%d lt=%d slots_sum=%d slots_head=%s rows_sum=%d row0=%s',
+                            self._apc_lidx, self.dcp_rank, int(attn_metadata.num_actual_tokens), int(local_tokens), int(_slots.sum().item()),
+                            _slots[:8].tolist(), int(_rows.sum().item()),
+                            _rows[:16].tolist(),
+                        )
+
                 else:
                     ops.cp_gather_cache(
                         src_cache=kv_cache,
@@ -3757,6 +3797,18 @@ class B12xMLASparseImpl(MLAAttentionImpl[B12xMLASparseMetadata]):
                 local_buffer[:padded_tokens].view(-1),
                 gathered_buffer[: self.dcp_world_size * padded_tokens].view(-1),
             )
+            if _apc_dbg() and os.path.exists('/tmp/KVARN_DBG_EVERY'):
+                _gb = gathered_buffer.view(torch.int16).reshape(-1)
+                _n = min(8192, _gb.numel())
+                logger.warning(
+                    'APCDBG allg L=%d R=%d stream=%d buf=%d pt=%d lt=%d sum=%d abs=%d kvptr=%d lptr=%d',
+                    getattr(self, '_apc_lidx', -1), self.dcp_rank,
+                    1 if stream is not None else 0, int(buf_idx), int(padded_tokens),
+                    int(local_tokens),
+                    int(_gb[:_n].to(torch.int64).sum().item()),
+                    int(_gb[:_n].to(torch.int64).abs().sum().item()),
+                    kv_cache.data_ptr(), ckv_workspace.data_ptr(),
+                )
         # Keep the cache geometry stable across requests. CuTe/B12X caches the
         # compiled prefill launch, while ``padded_tokens`` grows with context;
         # exposing a differently sized first dimension on every request can
@@ -3945,6 +3997,14 @@ class B12xMLASparseImpl(MLAAttentionImpl[B12xMLASparseMetadata]):
                 gathered_buffer,
                 slots,
             )
+        if _apc_dbg() and getattr(self, '_apc_lidx', -1) >= 0 and self._apc_lidx % 4 == 0:
+            _c0 = gathered_buffer[768:866].view(torch.int16).to(torch.int64)
+            logger.warning(
+                'APCDBG splice L=%d R=%d q=%d kvc_sum=%.3f region_sum=%d',
+                self._apc_lidx, self.dcp_rank, int(num_actual_toks),
+                float(kv_c.to(torch.float32).sum().item()),
+                int(_c0.sum().item()),
+            )
 
     def _sync_warmup(self) -> None:
         if self.device.type == "cuda":
@@ -4106,6 +4166,19 @@ class B12xMLASparseImpl(MLAAttentionImpl[B12xMLASparseMetadata]):
         use_ckv_gather = self.dcp_prefill_ckv_gather_eligible(
             attn_metadata, int(query_rows)
         )
+        import re as _re
+        _m = _re.search(r'layers\.(\d+)\.', getattr(layer, 'layer_name', '') or '')
+        self._apc_lidx = int(_m.group(1)) if _m else -1
+        if _apc_dbg() and _apc_layer_gate():
+            logger.warning(
+                'APCDBG fwd q_rows=%d maxq=%d prefill_toks=%d decode_toks=%d'
+                ' ckv_gather=%d use_decode=%d direct=%d dcp=%d',
+                int(query_rows), int(attn_metadata.max_query_len),
+                int(attn_metadata.num_prefill_tokens),
+                int(attn_metadata.num_decode_tokens),
+                int(use_ckv_gather), int(use_decode_kernel),
+                int(use_direct_native), self.dcp_world_size,
+            )
         workspace_tensors = self._borrow_workspaces()
         q_workspace = workspace_tensors[0]
         dense_out_workspace = workspace_tensors[1] if self._pad_heads else None
@@ -4232,6 +4305,32 @@ class B12xMLASparseImpl(MLAAttentionImpl[B12xMLASparseMetadata]):
                 _mask_page_table_after_nsa_len(
                     selected_indices, nsa_cache_seqlens
                 )
+            if _apc_dbg() and getattr(self, '_apc_lidx', -1) >= 0 and (
+                os.path.exists('/tmp/KVARN_DBG_EVERY')
+                or self._apc_lidx % 4 == 0
+            ):
+                _r = int(attn_metadata.num_actual_tokens) - 1
+                _si = selected_indices[_r]
+                _valid = _si[_si >= 0].to(torch.int64)
+                logger.warning(
+                    'APCDBG sel L=%d R=%d q=%d row=%d nvalid=%d sum=%d nsa=%d gcl=%d qsum=%d',
+                    self._apc_lidx, self.dcp_rank,
+                    int(attn_metadata.num_actual_tokens), _r,
+                    int(_valid.numel()), int(_valid.sum().item()),
+                    int(nsa_cache_seqlens[_r].item()),
+                    int(global_causal_len[_r].item()),
+                    int(q_all[_r].to(torch.float32).sum().item()),
+                )
+                _tgt = int(os.getenv('KVARN_DBG_POS', '4000'))
+                _hit = (global_causal_len[:num_actual_toks] == _tgt).nonzero(as_tuple=False)
+                if _hit.numel():
+                    _i = int(_hit[0, 0])
+                    logger.warning(
+                        'APCDBG posq L=%d R=%d pos=%d qsum=%d qabs=%d',
+                        self._apc_lidx, self.dcp_rank, _tgt,
+                        int(q_all[_i].to(torch.float32).sum().item()),
+                        int(q_all[_i].to(torch.float32).abs().sum().item()),
+                    )
         elif self.dcp_world_size > 1:
             # The indexer globally merges logical top-k ids across DCP ranks.
             # Compact just this rank's winners into local physical cache slots;
@@ -4435,20 +4534,13 @@ class B12xMLASparseImpl(MLAAttentionImpl[B12xMLASparseMetadata]):
             and prefetch_registry is not None
             and self._ckv_workspace_pool is not None
         ):
-            # The prefetch registry must hold the layer's real paged cache.
-            # ``kv_cache`` may have been rebound above to a per-step staging
-            # view (decode/extend selected-record staging) that is shared
-            # across all MLA layers; registering it poisons every
-            # ``layer_caches`` entry, and the next gather-eligible request's
-            # side-stream prefetches then gather all layers from that one
-            # stale shared tensor (identical wrong KV for every layer).
             cache_state = prefetch_registry.for_workspace(
                 q_workspace,
                 layer_idx,
-                kv_c_and_k_pe_cache,
+                kv_cache,
                 workspace_pool=self._ckv_workspace_pool,
             )
-            cache_state.register_cache(layer_idx, kv_c_and_k_pe_cache, self)
+            cache_state.register_cache(layer_idx, kv_cache, self)
         if use_ckv_gather:
             if prefetch_registry is None:
                 raise RuntimeError("CKV gather requires a prefetch state registry")
@@ -4457,13 +4549,13 @@ class B12xMLASparseImpl(MLAAttentionImpl[B12xMLASparseMetadata]):
             prefetch_state = prefetch_registry.for_workspace(
                 q_workspace,
                 layer_idx,
-                kv_c_and_k_pe_cache,
+                kv_cache,
                 workspace_pool=self._ckv_workspace_pool,
             )
             ckv_workspace = prefetch_state.get_ckv_workspace(self._ckv_workspace_nbytes)
             if layer_idx is not None and self._ckv_prefetch_depth > 0:
                 prefetch_state.enter_layer(layer_idx)
-                prefetch_state.register_cache(layer_idx, kv_c_and_k_pe_cache, self)
+                prefetch_state.register_cache(layer_idx, kv_cache, self)
             pending = (
                 prefetch_state.pending_layers.pop(layer_idx, None)
                 if layer_idx is not None and self._ckv_prefetch_depth > 0
@@ -4472,6 +4564,17 @@ class B12xMLASparseImpl(MLAAttentionImpl[B12xMLASparseMetadata]):
             if pending is not None:
                 gather_event, current_buf_idx = pending
                 gather_event.wait()
+                if _apc_dbg() and os.path.exists('/tmp/KVARN_DBG_EVERY'):
+                    _cb = self._ckv_workspace_views(ckv_workspace, current_buf_idx)[1]
+                    _c16 = _cb.view(torch.int16).reshape(-1)
+                    _n = min(8192, _c16.numel())
+                    logger.warning(
+                        'APCDBG consume L=%d R=%d buf=%d sum=%d abs=%d',
+                        self._apc_lidx if layer_idx is not None else -1, self.dcp_rank,
+                        int(current_buf_idx),
+                        int(_c16[:_n].to(torch.int64).sum().item()),
+                        int(_c16[:_n].to(torch.int64).abs().sum().item()),
+                    )
                 _, gathered_buffer = self._ckv_workspace_views(
                     ckv_workspace, current_buf_idx
                 )
@@ -4506,6 +4609,21 @@ class B12xMLASparseImpl(MLAAttentionImpl[B12xMLASparseMetadata]):
                 "(capacity=%d logical tokens)",
                 self._ckv_gather_max_tokens,
             )
+            if _apc_dbg() and getattr(self, '_apc_lidx', -1) >= 0 and (
+                os.path.exists('/tmp/KVARN_DBG_EVERY')
+                or self._apc_lidx % 4 == 0
+            ):
+                _kv16 = kv_cache.view(torch.int16)
+                _n = min(1024, _kv16.shape[0] * _kv16.shape[1])
+                _flat = _kv16.reshape(-1)[:_kv16.shape[0]*_kv16.shape[1]]
+                logger.warning(
+                    'APCDBG kvck L=%d R=%d q=%d kv_sum=%d kv_abs=%d buf=%d',
+                    self._apc_lidx, self.dcp_rank,
+                    int(attn_metadata.num_actual_tokens),
+                    int(_flat.to(torch.int64).sum().item()),
+                    int(_flat.to(torch.int64).abs().sum().item()),
+                    int(current_buf_idx),
+                )
             if (
                 self._ckv_prefetch_supported
                 and self._ckv_prefetch_depth > 0
