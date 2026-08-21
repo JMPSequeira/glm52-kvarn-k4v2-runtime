@@ -737,7 +737,11 @@ class KVarNMLAStateManager:
 
     @classmethod
     def maybe_log_exact_row_coverage(cls) -> None:
-        """Synchronously report per-row exact/K5 coverage when explicitly enabled."""
+        """Log per-step KV-row sourcing (exact/packed/invalid) when enabled.
+
+        KVARN_MLA_DIAG_EXACT_ROWS caps the number of STEPS logged (0 = off);
+        every impl with diag buffers is logged (target and draft).
+        """
         raw_limit = os.getenv("KVARN_MLA_DIAG_EXACT_ROWS", "0")
         try:
             limit = int(raw_limit)
@@ -747,58 +751,57 @@ class KVarNMLAStateManager:
             return
         cls._diag_steps += 1
         for group_key, state in cls._groups.items():
-            impl = next(
-                (
-                    candidate
-                    for candidate in state.impls
-                    if getattr(candidate, "_is_deepseek_mtp_draft", False)
-                    and getattr(candidate, "_kvarn_diag_selected_indices", None)
-                    is not None
-                ),
-                None,
-            )
-            if impl is None:
-                continue
-            selected = impl._kvarn_diag_selected_indices
-            valid_counts = impl._kvarn_diag_valid_counts
-            block_to_slot = impl._kvarn_block_to_slot
-            if selected is None or block_to_slot is None:
-                continue
-            rows = selected.shape[0]
-            width = selected.shape[1]
-            prefix = selected[:rows]
-            counts = (
-                valid_counts[:rows].clamp(min=0, max=width)
-                if valid_counts is not None
-                else (prefix >= 0).sum(dim=1)
-            )
-            active = (
-                torch.arange(width, device=selected.device)[None, :] < counts[:, None]
-            )
-            physical_valid = (prefix >= 0) & (prefix < block_to_slot.numel() * 64)
-            safe_blocks = prefix.clamp(0, block_to_slot.numel() * 64 - 1) // 64
-            pool_slots = block_to_slot[safe_blocks]
-            exact = active & physical_valid & (pool_slots >= 0)
-            packed = active & physical_valid & (pool_slots < 0)
-            invalid = active & ~physical_valid
-            stats = (
-                torch.stack(
-                    (
-                        counts.to(torch.int64),
-                        exact.sum(dim=1),
-                        packed.sum(dim=1),
-                        invalid.sum(dim=1),
-                    ),
-                    dim=1,
+            for impl in state.impls:
+                selected = getattr(impl, "_kvarn_diag_selected_indices", None)
+                if selected is None:
+                    continue
+                block_to_slot = getattr(impl, "_kvarn_block_to_slot", None)
+                if block_to_slot is None:
+                    continue
+                rows = selected.shape[0]
+                width = selected.shape[1]
+                valid_counts = getattr(impl, "_kvarn_diag_valid_counts", None)
+                counts = (
+                    valid_counts[:rows].clamp(min=0, max=width)
+                    if valid_counts is not None
+                    else (selected >= 0).sum(dim=1)
                 )
-                .cpu()
-                .tolist()
-            )
-            logger.warning(
-                "KVarN MTP exact-row coverage step=%d group=%s "
-                "rows=[valid,exact,packed,invalid]=%s mapped_blocks=%d",
-                cls._diag_steps,
-                group_key,
-                stats,
-                len(state.mapping),
-            )
+                active = (
+                    torch.arange(width, device=selected.device)[None, :]
+                    < counts[:, None]
+                )
+                physical_valid = (
+                    (selected >= 0) & (selected < block_to_slot.numel() * 64)
+                )
+                safe_blocks = selected.clamp(0, block_to_slot.numel() * 64 - 1) // 64
+                pool_slots = block_to_slot[safe_blocks]
+                exact = (active & physical_valid & (pool_slots >= 0)).sum(dim=1)
+                packed = (active & physical_valid & (pool_slots < 0)).sum(dim=1)
+                invalid = (active & ~physical_valid).sum(dim=1)
+                detail = (
+                    torch.stack((counts, exact, packed, invalid), dim=1)[
+                        : min(rows, 32)
+                    ]
+                    .cpu()
+                    .tolist()
+                )
+                totals = (
+                    torch.stack(
+                        (counts.sum(), exact.sum(), packed.sum(), invalid.sum())
+                    )
+                    .cpu()
+                    .tolist()
+                )
+                is_draft = getattr(impl, "_is_deepseek_mtp_draft", False)
+                logger.warning(
+                    "KVarN exact-row coverage step=%d group=%s impl=%s rows=%d "
+                    "tot=[valid,exact,packed,invalid]=%s per_row[valid,exact,"
+                    "packed,invalid]=%s mapped_blocks=%d",
+                    cls._diag_steps,
+                    group_key,
+                    "draft" if is_draft else "target",
+                    rows,
+                    totals,
+                    detail,
+                    len(state.mapping),
+                )
