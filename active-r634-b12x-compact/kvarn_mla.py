@@ -403,8 +403,15 @@ def pack_kvarn_mla_blocks(
             .sum()
             .item()
         )
+        _dim = _src.reshape(-1, _src.shape[-1])
+        _rng = (_dim.max(0).values - _dim.min(0).values)
+        _std = _dim.std(0).clamp_min(1e-6)
+        _ratio = float((_rng / _std).mean().item())
+        _kurt = float(
+            (((_dim - _dim.mean(0)) / _std) ** 4).mean().item()
+        )
         _logger.warning(
-            "KVarN pack-err diag #%d bits=%d blocks=%d rel_l2=%.4f src_norm=%.4f re_norm=%.4f rec_sum=%d pool_dtype=%s",
+            "KVarN pack-err diag #%d bits=%d blocks=%d rel_l2=%.4f src_norm=%.4f re_norm=%.4f rec_sum=%d range/std=%.1f kurt=%.1f pool_dtype=%s",
             _pack_err_diag_count[0],
             config.bits,
             num_blocks,
@@ -412,6 +419,8 @@ def pack_kvarn_mla_blocks(
             _sn,
             _rn,
             _rec_sum,
+            _ratio,
+            _kurt,
             latent_pool.dtype,
         )
 
