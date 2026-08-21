@@ -385,16 +385,21 @@ def pack_kvarn_mla_blocks(
     _diag_limit = int(os.environ.get("KVARN_MLA_DIAG_PACK_ERR", "0") or 0)
     if _diag_limit > 0 and _pack_err_diag_count[0] < _diag_limit:
         _pack_err_diag_count[0] += 1
-        _re_lat = torch.zeros_like(latent_pool.index_select(0, pool_slots))
-        _re_rope = torch.zeros_like(
-            rope_pool.index_select(0, pool_slots)
+        _ps = int(pool_slots.max().item()) + 1
+        _re_lat = torch.zeros(
+            _ps, latent_pool.shape[1], latent_pool.shape[2],
+            dtype=latent_pool.dtype, device=latent_pool.device,
+        )
+        _re_rope = torch.zeros(
+            _ps, rope_pool.shape[1], rope_pool.shape[2],
+            dtype=rope_pool.dtype, device=rope_pool.device,
         )
         rehydrate_kvarn_mla_blocks(
             kv_cache, _re_lat, _re_rope, block_ids, pool_slots, config
         )
         _src = latent_pool.index_select(0, pool_slots).float()
         _sn = _src.norm().item()
-        _rn = _re_lat.float().norm().item()
+        _rn = _re_lat.index_select(0, pool_slots).float().norm().item()
         _err = (_re_lat.float() - _src).norm() / max(_sn, 1e-9)
         _rec_sum = int(
             kv_cache.view(torch.uint8)
