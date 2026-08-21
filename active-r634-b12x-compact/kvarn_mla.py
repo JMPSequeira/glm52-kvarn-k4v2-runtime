@@ -393,13 +393,18 @@ def pack_kvarn_mla_blocks(
             kv_cache, _re_lat, _re_rope, block_ids, pool_slots, config
         )
         _src = latent_pool.index_select(0, pool_slots).float()
-        _err = (_re_lat.float() - _src).norm() / _src.norm()
+        _sn = _src.norm().item()
+        _rn = _re_lat.float().norm().item()
+        _err = (_re_lat.float() - _src).norm() / max(_sn, 1e-9)
         _logger.warning(
-            "KVarN pack-err diag #%d bits=%d blocks=%d rel_l2=%.4f",
+            "KVarN pack-err diag #%d bits=%d blocks=%d rel_l2=%.4f src_norm=%.4f re_norm=%.4f pool_dtype=%s",
             _pack_err_diag_count[0],
             config.bits,
             num_blocks,
             _err.item(),
+            _sn,
+            _rn,
+            latent_pool.dtype,
         )
 
 
