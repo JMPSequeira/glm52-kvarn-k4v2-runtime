@@ -410,6 +410,33 @@ def pack_kvarn_mla_blocks(
         _kurt = float(
             (((_dim - _dim.mean(0)) / _std) ** 4).mean().item()
         )
+        if _rn < _sn / 4 and _pack_err_diag_count[0] > 20:
+            import os as _os
+            _dump_dir = _os.environ.get("KVARN_MLA_DIAG_DUMP_DIR", "/tmp")
+            _dump_path = _os.path.join(
+                _dump_dir,
+                f"kvarn_badpack_{_pack_err_diag_count[0]}_{id(kv_cache)%100000}.pt",
+            )
+            if not _os.path.exists(_dump_path):
+                torch.save(
+                    {
+                        "block_ids": block_ids.detach().cpu(),
+                        "pool_slots": pool_slots.detach().cpu(),
+                        "src_latent": _src.detach().cpu(),
+                        "src_rope": rope_pool.index_select(0, pool_slots)
+                        .detach()
+                        .cpu(),
+                        "record": kv_cache.view(torch.uint8)
+                        .reshape(kv_cache.shape[0], -1)
+                        .index_select(0, block_ids)
+                        .detach()
+                        .cpu(),
+                        "bits": config.bits,
+                        "rel_l2": _err.item(),
+                    },
+                    _dump_path,
+                )
+                _logger.warning("KVarN bad-pack dumped to %s", _dump_path)
         _logger.warning(
             "KVarN pack-err diag #%d bits=%d blocks=%d rel_l2=%.4f src_norm=%.4f re_norm=%.4f rec_sum=%d range/std=%.1f kurt=%.1f pool_dtype=%s",
             _pack_err_diag_count[0],
