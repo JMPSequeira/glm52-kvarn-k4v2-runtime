@@ -16,6 +16,10 @@ from vllm.v1.attention.ops.kvarn_store import (
     kvarn_store_tile_k_batch_from_sinkhorn,
 )
 from vllm.v1.attention.ops.triton_kvarn_sinkhorn import kvarn_sinkhorn_triton
+from vllm.logger import init_logger
+
+_logger = init_logger(__name__)
+_pack_err_diag_count = [0]
 
 
 @triton.jit
@@ -377,6 +381,26 @@ def pack_kvarn_mla_blocks(
     kv_cache.view(torch.uint8).reshape(kv_cache.shape[0], -1).index_copy_(
         0, block_ids, records
     )
+
+    _diag_limit = int(os.environ.get("KVARN_MLA_DIAG_PACK_ERR", "0") or 0)
+    if _diag_limit > 0 and _pack_err_diag_count[0] < _diag_limit:
+        _pack_err_diag_count[0] += 1
+        _re_lat = torch.zeros_like(latent_pool.index_select(0, pool_slots))
+        _re_rope = torch.zeros_like(
+            rope_pool.index_select(0, pool_slots)
+        )
+        rehydrate_kvarn_mla_blocks(
+            kv_cache, _re_lat, _re_rope, block_ids, pool_slots, config
+        )
+        _src = latent_pool.index_select(0, pool_slots).float()
+        _err = (_re_lat.float() - _src).norm() / _src.norm()
+        _logger.warning(
+            "KVarN pack-err diag #%d bits=%d blocks=%d rel_l2=%.4f",
+            _pack_err_diag_count[0],
+            config.bits,
+            num_blocks,
+            _err.item(),
+        )
 
 
 @triton.jit
