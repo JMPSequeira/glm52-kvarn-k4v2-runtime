@@ -595,6 +595,7 @@ exec podman run --rm --pull=never --replace \
   --name "$CONTAINER_NAME" \
   --volume "$SRC/active-r634-runner/model_runner.py:/opt/venv/lib/python3.12/site-packages/vllm/v1/worker/gpu/model_runner.py" \
   --volume "$SRC/active-r634-b12x-compact/b12x_mla_sparse.py:/opt/venv/lib/python3.12/site-packages/vllm/v1/attention/backends/mla/b12x_mla_sparse.py" \
+  --volume "$SRC/active-r634-kvarn-k4-native/kvarn_mla_state.py:/opt/venv/lib/python3.12/site-packages/vllm/v1/attention/backends/mla/kvarn_mla_state.py" \
   --network host --ipc host --security-opt label=disable \
   --pids-limit 4096 \
   --ulimit memlock=-1:-1 --ulimit stack=67108864:67108864 \
