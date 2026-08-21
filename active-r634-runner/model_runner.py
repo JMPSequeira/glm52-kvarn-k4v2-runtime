@@ -1559,7 +1559,10 @@ class GPUModelRunner(LoRAModelRunnerMixin):
     def _remove_request(self, req_id: str) -> bool:
         kvarn_request = self._kvarn_mla_requests.pop(req_id, None)
         if kvarn_request is not None:
-            if self._kvarn_mla_pending_resolution is not None:
+            if (
+                self._kvarn_mla_pending_resolution is not None
+                and os.getenv("KVARN_MLA_DISABLE_STALE_FILL_GUARD", "0") != "1"
+            ):
                 for tracker in self._kvarn_mla_live_block_trackers.values():
                     tracker.mark_request_unknown(kvarn_request.tracker_key)
             self._kvarn_mla_removed_tracker_keys.add(kvarn_request.tracker_key)
