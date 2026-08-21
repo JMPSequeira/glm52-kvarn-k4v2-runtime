@@ -4337,6 +4337,8 @@ class B12xMLASparseImpl(MLAAttentionImpl[B12xMLASparseMetadata]):
                     cache_seqlens_int32=cache_seqlens,
                     nsa_cache_seqlens_int32=nsa_cache_seqlens,
                 )
+                self._kvarn_diag_selected_indices = binding.selected_indices
+                self._kvarn_diag_valid_counts = None
                 direct_scratch = binding.scratch
                 if (
                     direct_scratch.tmp_output is None

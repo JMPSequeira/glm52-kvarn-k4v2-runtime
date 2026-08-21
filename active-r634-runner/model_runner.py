@@ -73,7 +73,9 @@ from vllm.v1.worker.gpu.attn_utils import (
     init_attn_backend,
     init_kv_cache,
     init_kvarn_mla_live_block_trackers,
+
 )
+from vllm.v1.attention.backends.mla.kvarn_mla_state import KVarNMLAStateManager
 from vllm.v1.worker.gpu.block_table import BlockTables
 from vllm.v1.worker.gpu.buffer_utils import (
     async_copy_to_gpu,
@@ -1557,6 +1559,9 @@ class GPUModelRunner(LoRAModelRunnerMixin):
     def _remove_request(self, req_id: str) -> bool:
         kvarn_request = self._kvarn_mla_requests.pop(req_id, None)
         if kvarn_request is not None:
+            if self._kvarn_mla_pending_resolution is not None:
+                for tracker in self._kvarn_mla_live_block_trackers.values():
+                    tracker.mark_request_unknown(kvarn_request.tracker_key)
             self._kvarn_mla_removed_tracker_keys.add(kvarn_request.tracker_key)
         # Call model_state.remove_request *before* req_states.remove_request
         # so the model_state can still look up the slot index.
@@ -2677,6 +2682,8 @@ class GPUModelRunner(LoRAModelRunnerMixin):
                     num_spec_tokens_to_schedule,
                     self.num_speculative_steps,
                 )
+                if self._kvarn_mla_live_block_trackers:
+                    KVarNMLAStateManager.maybe_log_exact_row_coverage()
             with record_function_or_nullcontext(
                 f"vllm:v2/speculator/{phase}/store_draft_tokens"
             ):

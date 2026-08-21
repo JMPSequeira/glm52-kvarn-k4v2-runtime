@@ -1,0 +1,2 @@
+FROM localhost/glm52-kvarn-k4v2:tr3-fixdbg
+COPY kvarn_mla_state_dbg2.py /opt/venv/lib/python3.12/site-packages/vllm/v1/attention/backends/mla/kvarn_mla_state.py
