@@ -600,6 +600,7 @@ exec podman run --rm --pull=never --replace \
   --volume "$SRC/active-r634-b12x-compact/b12x_mla_sparse.py:/opt/venv/lib/python3.12/site-packages/vllm/v1/attention/backends/mla/b12x_mla_sparse.py" \
   --volume "$SRC/active-r634-kvarn-k4-native/kvarn_mla_state.py:/opt/venv/lib/python3.12/site-packages/vllm/v1/attention/backends/mla/kvarn_mla_state.py" \
   --volume "$SRC/active-r634-b12x-compact/kvarn_mla.py:/opt/venv/lib/python3.12/site-packages/vllm/v1/attention/ops/kvarn_mla.py" \
+  --volume "$SRC/active-r634-b12x-compact/mla_attention.py:/opt/venv/lib/python3.12/site-packages/vllm/model_executor/layers/attention/mla_attention.py" \
   --network host --ipc host --security-opt label=disable \
   --pids-limit 4096 \
   --ulimit memlock=-1:-1 --ulimit stack=67108864:67108864 \
