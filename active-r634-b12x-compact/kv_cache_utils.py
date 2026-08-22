@@ -1037,18 +1037,30 @@ def _get_kvarn_mla_workspace_config(
         )
         geometries.setdefault(geometry, config)
 
-    if len(geometries) != 1:
-        raise ValueError(
-            "A local worker cannot share one KVarN MLA workspace across "
-            f"multiple incompatible cache geometries: {tuple(geometries)}"
+    if not geometries:
+        return None
+    if len(geometries) > 1:
+        # Layer-wise mixed precision: the worker-level workspace is scratch
+        # (dtype-independent split buffers; per-impl configs drive kernels).
+        # Size it at the largest tile geometry; byte accounting stays
+        # conservative. Per-impl record layouts keep their own strides.
+        geometry = max(geometries, key=lambda g: g[4])
+        logger.info(
+            "KVarN MLA mixed-precision cache: %d geometries; workspace "
+            "sized at max tile_bytes=%d",
+            len(geometries),
+            geometry[4],
         )
-    geometry = next(iter(geometries))
+        workspace_config = geometries[geometry]
+    else:
+        geometry = next(iter(geometries))
+        workspace_config = geometries[geometry]
     if geometry[0] != 64 or geometry[4] not in (18_560, 26_752, 30_848):
         raise ValueError(
             "Unsupported KVarN MLA cache geometry: "
             f"block_size={geometry[0]}, page_size_bytes={geometry[4]}"
         )
-    return next(iter(geometries.values()))
+    return workspace_config
 
 
 def _get_kvarn_mla_num_blocks(
