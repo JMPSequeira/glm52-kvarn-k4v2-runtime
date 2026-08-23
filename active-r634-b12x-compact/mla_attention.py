@@ -824,23 +824,29 @@ class MLAAttention(nn.Module, AttentionLayerBase):
                 "KV cache format, please set `--attention-backend FLASHMLA_SPARSE`"
             )
 
+        def _layer_in_ranges(li: int, spec: str) -> bool:
+            for _part in spec.split(","):
+                if "-" in _part:
+                    _lo, _hi = _part.split("-")
+                    if int(_lo) <= li <= int(_hi):
+                        return True
+                elif _part.isdigit() and int(_part) == li:
+                    return True
+            return False
+
         # Layer-wise KVarN KV precision: demote selected target layers to
-        # k2 (e.g. KVARN_MLA_K2_LAYERS="40-77" or "0-9,40-77"). Draft/MTP
-        # prefixes never match "layers.N" and keep the base dtype.
+        # k2 (e.g. KVARN_MLA_K2_LAYERS="40-77"). Draft/MTP prefixes never
+        # match "layers.N" and keep the base dtype.
         _k2_layers = os.environ.get("KVARN_MLA_K2_LAYERS", "")
+        _k4_layers = os.environ.get("KVARN_MLA_K4_LAYERS", "")
+        if _k4_layers and kv_cache_dtype == "kvarn_mla_k5_g64":
+            _m = re.search(r"layers\.(\d+)", prefix or "")
+            if _m and _layer_in_ranges(int(_m.group(1)), _k4_layers):
+                kv_cache_dtype = "kvarn_mla_k4_g64"
         if _k2_layers and kv_cache_dtype == "kvarn_mla_k4_g64":
             _m = re.search(r"layers\.(\d+)", prefix or "")
-            if _m:
-                _li = int(_m.group(1))
-                for _part in _k2_layers.split(","):
-                    if "-" in _part:
-                        _lo, _hi = _part.split("-")
-                        if int(_lo) <= _li <= int(_hi):
-                            kv_cache_dtype = "kvarn_mla_k2_g64"
-                            break
-                    elif _part.isdigit() and int(_part) == _li:
-                        kv_cache_dtype = "kvarn_mla_k2_g64"
-                        break
+            if _m and _layer_in_ranges(int(_m.group(1)), _k2_layers):
+                kv_cache_dtype = "kvarn_mla_k2_g64"
         # Initialize KV cache quantization attributes
         self.kv_cache_dtype = kv_cache_dtype
         self.calculate_kv_scales = calculate_kv_scales
