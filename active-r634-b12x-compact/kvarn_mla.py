@@ -750,10 +750,8 @@ def rehydrate_kvarn_mla_blocks(
         raise ValueError("KVarN MLA rehydrate index buffers must be int64")
     if not block_ids.is_contiguous() or not pool_slots.is_contiguous():
         raise ValueError("KVarN MLA rehydrate index buffers must be contiguous")
-    if (
-        int(os.environ.get("KVARN_MLA_DIAG_REHYDR_DUMP", "0") or 0) > 0
-        and block_ids.numel() >= 8
-    ):
+    _rh_dump_dir = os.environ.get("KVARN_MLA_DIAG_REHYDR_DUMP", "")
+    if _rh_dump_dir and block_ids.numel() >= 8:
         _pre_pool = latent_pool.index_select(0, pool_slots).detach().cpu().clone()
         _pre_rope = rope_pool.index_select(0, pool_slots).detach().cpu().clone()
         _rec = (
