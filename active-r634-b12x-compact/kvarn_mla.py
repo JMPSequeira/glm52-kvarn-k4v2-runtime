@@ -782,32 +782,7 @@ def rehydrate_kvarn_mla_blocks(
             },
             _path,
         )
-        _logger.warning("KVarN rehydrate dump (pre) -> %s", _path)
-        _orig_rehydrate = _rehydrate_kvarn_mla_blocks_kernel
-
-        def _capture_post():
-            torch.cuda.synchronize()
-            torch.save(
-                {
-                    "post_pool": latent_pool.detach().cpu().clone(),
-                    "post_rope": rope_pool.detach().cpu().clone(),
-                    "block_ids": block_ids.detach().cpu(),
-                    "pool_slots": pool_slots.detach().cpu(),
-                    "bits": config.bits,
-                    "pool_id": id(latent_pool),
-                },
-                _path.replace(".pt", "_post.pt"),
-            )
-            _logger.warning("KVarN rehydrate dump (post) captured")
-
-        import threading as _threading
-
-        def _run_then_capture():
-            _capture_post()
-
-        _th = _threading.Timer(0.05, _run_then_capture)
-        _th.daemon = True
-        _th.start()
+        _logger.warning("KVarN rehydrate dump -> %s", _path)
     cache_bytes = kv_cache.view(torch.uint8)
     _rehydrate_kvarn_mla_blocks_kernel[
         (block_ids.numel(), config.group)
@@ -834,6 +809,24 @@ def rehydrate_kvarn_mla_blocks(
         ROPE_OFFSET=config.rope_offset,
         num_warps=4,
     )
+    if (
+        _rh_dump_dir
+        and block_ids.numel() >= 8
+    ):
+        torch.cuda.synchronize()
+        torch.save(
+            {
+                "post_pool": latent_pool.detach().cpu().clone(),
+                "post_rope": rope_pool.detach().cpu().clone(),
+                "block_ids": block_ids.detach().cpu(),
+                "pool_slots": pool_slots.detach().cpu(),
+                "records": _rec,
+                "bits": config.bits,
+                "pool_id": id(latent_pool),
+            },
+            _path.replace(".pt", "_post.pt"),
+        )
+        _logger.warning("KVarN rehydrate POST dump captured")
 
 
 @triton.jit
