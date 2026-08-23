@@ -750,6 +750,40 @@ def rehydrate_kvarn_mla_blocks(
         raise ValueError("KVarN MLA rehydrate index buffers must be int64")
     if not block_ids.is_contiguous() or not pool_slots.is_contiguous():
         raise ValueError("KVarN MLA rehydrate index buffers must be contiguous")
+    if (
+        int(os.environ.get("KVARN_MLA_DIAG_REHYDR_DUMP", "0") or 0) > 0
+        and block_ids.numel() >= 8
+    ):
+        _pre_pool = latent_pool.index_select(0, pool_slots).detach().cpu().clone()
+        _pre_rope = rope_pool.index_select(0, pool_slots).detach().cpu().clone()
+        _rec = (
+            kv_cache.view(torch.uint8)
+            .reshape(kv_cache.shape[0], -1)
+            .index_select(0, block_ids)
+            .detach()
+            .cpu()
+            .clone()
+        )
+        _path = os.path.join(
+            os.environ["KVARN_MLA_DIAG_REHYDR_DUMP"],
+            f"kvarn_rehydrate_{block_ids.numel()}blk_{id(latent_pool) % 100000}.pt",
+        )
+        torch.save(
+            {
+                "block_ids": block_ids.detach().cpu(),
+                "pool_slots": pool_slots.detach().cpu(),
+                "pre_pool": _pre_pool,
+                "pre_rope": _pre_rope,
+                "records": _rec,
+                "bits": config.bits,
+                "tile_bytes": config.tile_bytes,
+                "pool_shape": tuple(latent_pool.shape),
+                "pool_strides": tuple(latent_pool.stride()),
+                "kv_row_stride": kv_cache.view(torch.uint8).stride(0),
+            },
+            _path,
+        )
+        _logger.warning("KVarN rehydrate dump -> %s", _path)
     cache_bytes = kv_cache.view(torch.uint8)
     _rehydrate_kvarn_mla_blocks_kernel[
         (block_ids.numel(), config.group)
