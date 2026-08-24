@@ -2721,6 +2721,23 @@ class B12xMLASparseImpl(MLAAttentionImpl[B12xMLASparseMetadata]):
         if self._kvarn_cache_ref is None or block_ids.numel() == 0:
             return
         assert self._kvarn_config is not None
+        _ln_diag = os.environ.get("KVARN_MLA_DIAG_LAYER_NORMS", "")
+        if _ln_diag:
+            _n = getattr(self, "_kvarn_lnn_count", 0)
+            if _n < int(_ln_diag):
+                self._kvarn_lnn_count = _n + 1
+                _rows = self._kvarn_latent_pool.index_select(0, pool_slots)
+                _norms = _rows.float().reshape(_rows.shape[0], -1).norm(dim=1)
+                logger.info(
+                    "KVARN-LNN layer=%s flush#%d tiles=%d norm_mean=%.3f "
+                    "norm_min=%.3f norm_max=%.3f",
+                    self.layer_name,
+                    _n,
+                    _rows.shape[0],
+                    _norms.mean().item(),
+                    _norms.min().item(),
+                    _norms.max().item(),
+                )
         from vllm.v1.attention.ops.kvarn_mla import pack_kvarn_mla_blocks
 
         pack_kvarn_mla_blocks(
