@@ -704,6 +704,20 @@ class KVarNMLAStateManager:
         rehydrate_ids = [
             block_id for block_id in missing if block_id in state.flushed
         ]
+        _rh_dbg = os.environ.get("KVARN_MLA_DIAG_RESTORE_STATE", "")
+        if _rh_dbg and len(missing) >= 4:
+            _skipped = [b for b in missing if b not in state.flushed]
+            logger.warning(
+                "KVARN-RESTORE group=%s missing=%d rehydrate=%d SKIPPED=%d "
+                "skipped_ids=%s fills_known=%d flushed_total=%d",
+                group_key[1] if len(group_key) > 1 else group_key,
+                len(missing),
+                len(rehydrate_ids),
+                len(_skipped),
+                _skipped[:16],
+                len(block_fills),
+                len(state.flushed),
+            )
         if rehydrate_ids:
             from vllm.v1.attention.ops.kvarn_mla import (
                 rehydrate_kvarn_mla_blocks,
