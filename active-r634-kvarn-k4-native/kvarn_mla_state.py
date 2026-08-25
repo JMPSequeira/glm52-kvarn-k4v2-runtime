@@ -199,9 +199,20 @@ class KVarNMLALiveBlockTracker:
         return blocks
 
     def _consume_resolved(self, req_id: str) -> None:
+        owner = req_id.split(":")[0]
         for group_id, blocks in self.resolved_blocks.pop(req_id, {}).items():
             step_blocks = self.step_blocks[group_id]
             for block_id, fill in blocks.items():
+                holder = None
+                for rid, rgroups in self.request_blocks.items():
+                    if block_id in rgroups.get(group_id, {}):
+                        holder = rid
+                        break
+                if holder is not None and holder != owner:
+                    # Ghost: the physical block id was reused by another
+                    # request; a dead owner's correction must not max-merge
+                    # into the new owner's fills.
+                    continue
                 self._merge_fill(step_blocks, block_id, fill)
 
     def resolve_async(
@@ -716,7 +727,7 @@ class KVarNMLAStateManager:
             block_id
             for block_id in missing
             if block_id not in state.flushed
-            and block_fills.get(block_id, 0) >= config.group
+            and (block_fills.get(block_id) or 0) >= config.group
         ]
         if _orphans:
             logger.warning(
