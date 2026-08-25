@@ -323,6 +323,40 @@ def _serialize_kvarn_mla_blocks(
     )
 
 
+def _kvarn_pack_dump_at_exit(
+    kv_cache, block_ids, pool_slots, config
+):
+    _pack_dump = os.environ.get("KVARN_MLA_DIAG_PACK_DUMP", "")
+    if (
+        _pack_dump
+        and block_ids.numel() >= 4
+        and globals().setdefault("_PACK_DUMP_COUNT", [0])[0]
+        < int(os.environ.get("KVARN_MLA_DIAG_PACK_DUMP_MAX", "400"))
+    ):
+        globals()["_PACK_DUMP_COUNT"][0] += 1
+        _dump_path = os.path.join(
+            _pack_dump,
+            f"kvarn_pack_{config.bits}b_{block_ids[0].item()}-{block_ids[-1].item()}_"
+            f"{id(kv_cache) % 100000}.pt",
+        )
+        torch.save(
+            {
+                "block_ids": block_ids.detach().cpu(),
+                "pool_slots": pool_slots.detach().cpu(),
+                "records": (
+                    kv_cache.view(torch.uint8)
+                    .reshape(kv_cache.shape[0], -1)
+                    .index_select(0, block_ids)
+                    .detach()
+                    .cpu()
+                ),
+                "bits": config.bits,
+            },
+            _dump_path,
+        )
+        _logger.warning("KVarN pack dump #%d -> %s", globals()["_PACK_DUMP_COUNT"][0], _dump_path)
+
+
 def pack_kvarn_mla_blocks(
     kv_cache: torch.Tensor,
     latent_pool: torch.Tensor,
@@ -486,46 +520,9 @@ def pack_kvarn_mla_blocks(
             _kurt,
             latent_pool.dtype,
         )
-
-
-@triton.jit
-def _pack_dump_placeholder():
-    pass
-
     _kvarn_pack_dump_at_exit(kv_cache, block_ids, pool_slots, config)
 
-def _kvarn_pack_dump_at_exit(
-    kv_cache, block_ids, pool_slots, config
-):
-    _pack_dump = os.environ.get("KVARN_MLA_DIAG_PACK_DUMP", "")
-    if (
-        _pack_dump
-        and block_ids.numel() >= 4
-        and globals().setdefault("_PACK_DUMP_COUNT", [0])[0]
-        < int(os.environ.get("KVARN_MLA_DIAG_PACK_DUMP_MAX", "400"))
-    ):
-        globals()["_PACK_DUMP_COUNT"][0] += 1
-        _dump_path = os.path.join(
-            _pack_dump,
-            f"kvarn_pack_{config.bits}b_{block_ids[0].item()}-{block_ids[-1].item()}_"
-            f"{id(kv_cache) % 100000}.pt",
-        )
-        torch.save(
-            {
-                "block_ids": block_ids.detach().cpu(),
-                "pool_slots": pool_slots.detach().cpu(),
-                "records": (
-                    kv_cache.view(torch.uint8)
-                    .reshape(kv_cache.shape[0], -1)
-                    .index_select(0, block_ids)
-                    .detach()
-                    .cpu()
-                ),
-                "bits": config.bits,
-            },
-            _dump_path,
-        )
-        _logger.warning("KVarN pack dump #%d -> %s", globals()["_PACK_DUMP_COUNT"][0], _dump_path)
+
 
 
 def _materialize_selected_kvarn_mla_kernel(
