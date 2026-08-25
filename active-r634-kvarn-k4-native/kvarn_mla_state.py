@@ -810,7 +810,7 @@ class KVarNMLAStateManager:
                 logger.warning(
                     "KVarN exact-row coverage step=%d group=%s impl=%s rows=%d "
                     "tot=[valid,exact,packed,invalid]=%s per_row[valid,exact,"
-                    "packed,invalid]=%s mapped_blocks=%d selsum=%d",
+                    "packed,invalid]=%s mapped_blocks=%d selsum=%d poolsum=%d",
                     cls._diag_steps,
                     group_key,
                     "draft" if is_draft else "target",
@@ -821,6 +821,13 @@ class KVarNMLAStateManager:
                     (
                         int(selected.to(torch.int64).sum().item())
                         if selected is not None
+                        else -1
+                    ),
+                    (
+                        int(
+                            impl._kvarn_latent_pool.float().abs().sum().item()
+                        )
+                        if getattr(impl, "_kvarn_latent_pool", None) is not None
                         else -1
                     ),
                 )
