@@ -2715,10 +2715,6 @@ class B12xMLASparseImpl(MLAAttentionImpl[B12xMLASparseMetadata]):
                 "KVarN MLA exact-slot map is smaller than the allocated cache"
             )
         KVarNMLAStateManager.validate_records_storage(kv_cache)
-        # Rebind-proof record snapshot: survives reset_cache_bindings so
-        # initialize_kv_cache can carry packed records across a same-
-        # geometry reallocation (restored before the first prepare_step).
-        self._kvarn_records_snapshot = kv_cache
         self._kvarn_cache_ref = kv_cache
 
     def _flush_kvarn_mla_blocks(
