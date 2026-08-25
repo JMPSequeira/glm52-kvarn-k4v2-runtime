@@ -415,7 +415,38 @@ def pack_kvarn_mla_blocks(
         _kurt = float(
             (((_dim - _dim.mean(0)) / _std) ** 4).mean().item()
         )
-        if _rn < _sn / 4 and _pack_err_diag_count[0] > 20:
+        _pack_dump = os.environ.get("KVARN_MLA_DIAG_PACK_DUMP", "")
+        if (
+            _pack_dump
+            and block_ids.numel() >= 4
+            and sum(1 for _ in [0]) == 1
+            and globals().setdefault("_PACK_DUMP_COUNT", [0])[0]
+            < int(os.environ.get("KVARN_MLA_DIAG_PACK_DUMP_MAX", "400"))
+        ):
+            globals()["_PACK_DUMP_COUNT"][0] += 1
+            import os as _os
+            _dump_path = _os.path.join(
+                _pack_dump,
+                f"kvarn_pack_{config.bits}b_{block_ids[0].item()}-{block_ids[-1].item()}_"
+                f"{id(kv_cache) % 100000}.pt",
+            )
+            torch.save(
+                {
+                    "block_ids": block_ids.detach().cpu(),
+                    "pool_slots": pool_slots.detach().cpu(),
+                    "records": (
+                        kv_cache.view(torch.uint8)
+                        .reshape(kv_cache.shape[0], -1)
+                        .index_select(0, block_ids)
+                        .detach()
+                        .cpu()
+                    ),
+                    "bits": config.bits,
+                },
+                _dump_path,
+            )
+            _logger.warning("KVarN pack dump -> %s", _dump_path)
+        if False:  # legacy conditional dump below disabled under pack-dump mode        if _rn < _sn / 4 and _pack_err_diag_count[0] > 20:
             import os as _os
             _dump_dir = _os.environ.get("KVARN_MLA_DIAG_DUMP_DIR", "/tmp")
             _dump_path = _os.path.join(
