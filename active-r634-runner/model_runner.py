@@ -951,6 +951,24 @@ class GPUModelRunner(LoRAModelRunnerMixin):
             self.kernel_block_sizes,
             self.vllm_config,
         )
+
+        # Carry KVarN packed records across a same-geometry reallocation:
+        # copy each impl's pre-init snapshot into the freshly bound tensor
+        # BEFORE any prepare_step can rehydrate from it.
+        if _prev_blocks is not None and _prev_blocks == _new_blocks:
+            for layer in (
+                self.compilation_config.static_forward_context.values()
+            ):
+                impl = getattr(layer, "impl", None)
+                snap = getattr(impl, "_kvarn_records_snapshot", None)
+                new_cache = getattr(layer, "kv_cache", None)
+                if (
+                    snap is not None
+                    and isinstance(new_cache, torch.Tensor)
+                    and new_cache.data_ptr() != snap.data_ptr()
+                    and new_cache.shape == snap.shape
+                ):
+                    new_cache.copy_(snap.to(new_cache.device))
         self._kvarn_mla_live_block_trackers = init_kvarn_mla_live_block_trackers(
             kv_cache_config,
             self.dcp_size,
