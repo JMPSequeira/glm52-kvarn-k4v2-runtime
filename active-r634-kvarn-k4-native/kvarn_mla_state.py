@@ -7,6 +7,7 @@ from __future__ import annotations
 import math
 import os
 import time
+_BOOT_T0 = time.monotonic()
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Protocol
@@ -624,9 +625,12 @@ class KVarNMLAStateManager:
             import traceback
             logger.warning(
                 "KVarN reset_cache_bindings clearing %d group states; "
-                "caller:\n%s",
+                "uptime=%.1fs; caller:\n%s",
                 len(cls._groups),
-                "".join(traceback.format_stack()[-6:-1]),
+                time.monotonic() - _BOOT_T0,
+                len(cls._groups),
+                time.monotonic() - _BOOT_T0,
+                "".join(traceback.format_stack()[-14:-1]),
             )
         cls._groups.clear()
         cls.rebind_cache_pointers()
