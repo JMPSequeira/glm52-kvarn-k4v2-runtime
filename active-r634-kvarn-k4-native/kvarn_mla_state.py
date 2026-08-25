@@ -757,10 +757,21 @@ class KVarNMLAStateManager:
             # prefix-cache hit can restore exact rows from it.
             state.flushed.update(flush_ids)
 
+        _lost_flushed = [b for b in retired if b in state.flushed]
+        if _lost_flushed:
+            cls._audit.log(
+                _lost_flushed[0],
+                "retired_still_flushed",
+                f"n={len(_lost_flushed)} ids={_lost_flushed[:6]}",
+            )
         for block_id in retired:
-            cls._audit.log(block_id, "retire", f"fill={fill} st={group_key[-1] if isinstance(group_key, tuple) else group_key}")
             state.free_slots.append(state.mapping.pop(block_id))
             fill = state.block_fill.pop(block_id, None)
+            cls._audit.log(
+                block_id,
+                "retire",
+                f"fill={fill} flushed={block_id in state.flushed}",
+            )
             if fill is not None and fill < config.group and block_id not in (
                 state.flushed
             ):
