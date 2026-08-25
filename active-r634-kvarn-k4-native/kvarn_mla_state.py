@@ -782,10 +782,25 @@ class KVarNMLAStateManager:
                 "Reduce max_num_seqs or max_num_batched_tokens."
             )
         mirror_updates = {block_id: -1 for block_id in retired}
+        _orphan_set = set(_orphans) if _orphans else set()
         for block_id in missing:
             slot = state.free_slots.pop()
             state.mapping[block_id] = slot
             mirror_updates[block_id] = slot
+            if block_id in _orphan_set:
+                # Provenance-lost block: its recycled slot holds ANOTHER
+                # block's rows. Serving them cross-contaminates attention
+                # and spreads (state-accumulating corruption). Zero the
+                # slot: the block degrades (empty context) but cannot
+                # poison or be poisoned by foreign content.
+                state_pools = [
+                    impl._kvarn_latent_pool
+                    for impl in state.impls
+                    if getattr(impl, "_kvarn_latent_pool", None) is not None
+                ]
+                for pool in state_pools:
+                    pool[slot].zero_()
+                cls._audit.log(block_id, "orphan_zero", f"slot={slot}")
             cls._audit.log(block_id, "alloc", f"slot={slot} st={group_key[-1] if isinstance(group_key, tuple) else group_key}")
 
         # A missing block whose rows were persisted by a retire-flush is a
