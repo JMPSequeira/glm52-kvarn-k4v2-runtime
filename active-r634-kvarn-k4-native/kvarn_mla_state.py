@@ -41,7 +41,6 @@ class KVarNMLARequestState(Protocol):
     num_computed_tokens: int
 
 
-@dataclass
 class _BlockAudit:
     """Ring-buffered per-block transition log for corruption forensics."""
 
@@ -58,6 +57,7 @@ class _BlockAudit:
         return [e for e in self.events if e[1] == block_id][-last:]
 
 
+@dataclass
 class KVarNMLALiveBlockTracker:
     """Tracks persistent and per-step exact blocks from scheduler CPU state."""
 
