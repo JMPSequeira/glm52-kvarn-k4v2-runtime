@@ -2714,6 +2714,7 @@ class B12xMLASparseImpl(MLAAttentionImpl[B12xMLASparseMetadata]):
             raise RuntimeError(
                 "KVarN MLA exact-slot map is smaller than the allocated cache"
             )
+        KVarNMLAStateManager.validate_records_storage(kv_cache)
         self._kvarn_cache_ref = kv_cache
 
     def _flush_kvarn_mla_blocks(

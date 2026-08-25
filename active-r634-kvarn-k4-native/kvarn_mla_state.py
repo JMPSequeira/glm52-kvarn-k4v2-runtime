@@ -589,6 +589,22 @@ class KVarNMLAStateManager:
         cls._impls.add(impl)
 
     @classmethod
+    def validate_records_storage(cls, kv_cache) -> None:
+        """Drop flushed membership if the paged record tensor was reallocated.
+
+        Mapping (exact pool rows, impl-side) survives reallocation; packed
+        records do not. Restoring from wiped records yields zeros - detect
+        the storage change at first re-bind and retire only the record
+        provenance.
+        """
+        ptr = kv_cache.data_ptr()
+        for state in cls._groups.values():
+            prev = getattr(state, "records_ptr", None)
+            if prev is not None and prev != ptr:
+                state.flushed.clear()
+            state.records_ptr = ptr
+
+    @classmethod
     def rebind_cache_pointers(cls) -> None:
         """Drop impl->tensor bindings only; ownership state survives.
 
