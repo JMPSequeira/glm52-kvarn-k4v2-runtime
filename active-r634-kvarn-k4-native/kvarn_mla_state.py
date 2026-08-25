@@ -656,6 +656,7 @@ class KVarNMLAStateManager:
             block_id
             for block_id in retired
             if state.block_fill.get(block_id, 0) >= config.group
+            or block_id in state.flushed
         ]
         if flush_ids:
             device = impls[0].device
@@ -674,11 +675,14 @@ class KVarNMLAStateManager:
         for block_id in retired:
             state.free_slots.append(state.mapping.pop(block_id))
             fill = state.block_fill.pop(block_id, None)
-            if fill is not None and fill < config.group:
-                # A block retired below full fill has no packed copy of its
-                # current content, so it can never be served from the paged
-                # record.
-                state.flushed.discard(block_id)
+            if fill is not None and fill < config.group and block_id not in (
+                state.flushed
+            ):
+                # A never-flushed block retired below full fill has no packed
+                # copy of its current content. Blocks already in flushed are
+                # re-packed above (pack is fill-unbounded; readers are
+                # fill-bounded), so their membership stays valid.
+                pass
             # A block with NO fill entry (accounting dropped on request
             # removal or stale-fill guard) that was previously flushed-full
             # still has a valid packed copy: nothing rewrote it. Keep the
@@ -708,6 +712,20 @@ class KVarNMLAStateManager:
         rehydrate_ids = [
             block_id for block_id in missing if block_id in state.flushed
         ]
+        _orphans = [
+            block_id
+            for block_id in missing
+            if block_id not in state.flushed
+            and block_fills.get(block_id, 0) >= config.group
+        ]
+        if _orphans:
+            logger.warning(
+                "KVarN provenance-lost re-entry: %d blocks missing AND not "
+                "flushed with published fill>=group (treated as fresh; "
+                "prefix-hit blocks here will read recycled rows): %s",
+                len(_orphans),
+                _orphans[:8],
+            )
         _rh_dbg = os.environ.get("KVARN_MLA_DIAG_RESTORE_STATE", "")
         if _rh_dbg and len(missing) >= 4:
             _skipped = [b for b in missing if b not in state.flushed]
