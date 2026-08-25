@@ -590,6 +590,14 @@ class KVarNMLAStateManager:
 
     @classmethod
     def reset_cache_bindings(cls) -> None:
+        if cls._groups:
+            import traceback
+            logger.warning(
+                "KVarN reset_cache_bindings clearing %d group states; "
+                "caller:\n%s",
+                len(cls._groups),
+                "".join(traceback.format_stack()[-6:-1]),
+            )
         cls._groups.clear()
         cls._diag_steps = 0
         for impl in cls._impls:
@@ -699,7 +707,7 @@ class KVarNMLAStateManager:
             or block_id in state.flushed
         ]
         for _fb in flush_ids:
-            cls._audit.log(_fb, "flush_pack", f"fill={state.block_fill.get(_fb)}")
+            cls._audit.log(_fb, "flush_pack", f"fill={state.block_fill.get(_fb)} st={group_key[-1] if isinstance(group_key, tuple) else group_key}")
         if flush_ids:
             device = impls[0].device
             block_ids = torch.tensor(flush_ids, dtype=torch.long, device=device)
@@ -715,7 +723,7 @@ class KVarNMLAStateManager:
             state.flushed.update(flush_ids)
 
         for block_id in retired:
-            cls._audit.log(block_id, "retire", f"fill={fill}")
+            cls._audit.log(block_id, "retire", f"fill={fill} st={group_key[-1] if isinstance(group_key, tuple) else group_key}")
             state.free_slots.append(state.mapping.pop(block_id))
             fill = state.block_fill.pop(block_id, None)
             if fill is not None and fill < config.group and block_id not in (
@@ -743,7 +751,7 @@ class KVarNMLAStateManager:
             slot = state.free_slots.pop()
             state.mapping[block_id] = slot
             mirror_updates[block_id] = slot
-            cls._audit.log(block_id, "alloc", f"slot={slot}")
+            cls._audit.log(block_id, "alloc", f"slot={slot} st={group_key[-1] if isinstance(group_key, tuple) else group_key}")
 
         # A missing block whose rows were persisted by a retire-flush is a
         # prefix-cache hit (or an equivalent re-entry): no step will ever
@@ -757,7 +765,7 @@ class KVarNMLAStateManager:
             block_id for block_id in missing if block_id in state.flushed
         ]
         for _rb in rehydrate_ids:
-            cls._audit.log(_rb, "rehydrate")
+            cls._audit.log(_rb, "rehydrate", f"st={group_key[-1] if isinstance(group_key, tuple) else group_key}")
         _orphans = [
             block_id
             for block_id in missing
@@ -770,7 +778,7 @@ class KVarNMLAStateManager:
                 raise RuntimeError(
                     "KVarN provenance-lost re-entry (fatal): blocks "
                     f"{_orphans[:8]} missing AND not flushed with "
-                    f"fill>=group. Audit history: {_hist}"
+                    f"fill>=group. st={group_key}. Audit history: {_hist}"
                 )
             logger.warning(
                 "KVarN provenance-lost re-entry: %d blocks missing AND not "
