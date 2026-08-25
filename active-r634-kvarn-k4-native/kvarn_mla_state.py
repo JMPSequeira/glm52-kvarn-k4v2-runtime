@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import math
 import os
+import time
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Protocol
@@ -41,6 +42,22 @@ class KVarNMLARequestState(Protocol):
 
 
 @dataclass
+class _BlockAudit:
+    """Ring-buffered per-block transition log for corruption forensics."""
+
+    def __init__(self, capacity: int = 20000):
+        self.events: list[tuple] = []
+        self.capacity = capacity
+
+    def log(self, block_id, event: str, detail: str = "") -> None:
+        self.events.append((time.monotonic(), block_id, event, detail))
+        if len(self.events) > self.capacity:
+            del self.events[: self.capacity // 2]
+
+    def history(self, block_id, last: int = 40):
+        return [e for e in self.events if e[1] == block_id][-last:]
+
+
 class KVarNMLALiveBlockTracker:
     """Tracks persistent and per-step exact blocks from scheduler CPU state."""
 
@@ -51,6 +68,7 @@ class KVarNMLALiveBlockTracker:
     step_blocks: dict[int, dict[int, int | None]] = field(default_factory=dict)
     pending_blocks: dict[str, dict[int, dict[int, int]]] = field(default_factory=dict)
     resolved_blocks: dict[str, dict[int, dict[int, int]]] = field(default_factory=dict)
+    audit: "_BlockAudit" = field(default_factory=lambda: _BlockAudit())
     epoch_blocks: dict[str, dict[int, dict[int, int | None]]] = field(
         default_factory=dict
     )
@@ -669,6 +687,8 @@ class KVarNMLAStateManager:
             if state.block_fill.get(block_id, 0) >= config.group
             or block_id in state.flushed
         ]
+        for _fb in flush_ids:
+            self.audit.log(_fb, "flush_pack", f"fill={state.block_fill.get(_fb)}")
         if flush_ids:
             device = impls[0].device
             block_ids = torch.tensor(flush_ids, dtype=torch.long, device=device)
@@ -684,6 +704,7 @@ class KVarNMLAStateManager:
             state.flushed.update(flush_ids)
 
         for block_id in retired:
+            self.audit.log(block_id, "retire", f"fill={fill}")
             state.free_slots.append(state.mapping.pop(block_id))
             fill = state.block_fill.pop(block_id, None)
             if fill is not None and fill < config.group and block_id not in (
@@ -711,6 +732,7 @@ class KVarNMLAStateManager:
             slot = state.free_slots.pop()
             state.mapping[block_id] = slot
             mirror_updates[block_id] = slot
+            self.audit.log(block_id, "alloc", f"slot={slot}")
 
         # A missing block whose rows were persisted by a retire-flush is a
         # prefix-cache hit (or an equivalent re-entry): no step will ever
@@ -723,6 +745,8 @@ class KVarNMLAStateManager:
         rehydrate_ids = [
             block_id for block_id in missing if block_id in state.flushed
         ]
+        for _rb in rehydrate_ids:
+            self.audit.log(_rb, "rehydrate")
         _orphans = [
             block_id
             for block_id in missing
@@ -730,6 +754,13 @@ class KVarNMLAStateManager:
             and (block_fills.get(block_id) or 0) >= config.group
         ]
         if _orphans:
+            if os.environ.get("KVARN_MLA_ORPHAN_RAISE", "0") == "1":
+                _hist = {b: self.audit.history(b) for b in _orphans[:8]}
+                raise RuntimeError(
+                    "KVarN provenance-lost re-entry (fatal): blocks "
+                    f"{_orphans[:8]} missing AND not flushed with "
+                    f"fill>=group. Audit history: {_hist}"
+                )
             logger.warning(
                 "KVarN provenance-lost re-entry: %d blocks missing AND not "
                 "flushed with published fill>=group (treated as fresh; "
