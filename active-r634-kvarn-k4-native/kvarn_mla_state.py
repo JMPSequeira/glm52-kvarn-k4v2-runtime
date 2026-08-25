@@ -775,6 +775,12 @@ class KVarNMLAStateManager:
             # flushed membership so future re-entries restore from it.
 
         missing = sorted(needed.difference(state.mapping))
+        _orphans = [
+            block_id
+            for block_id in missing
+            if block_id not in state.flushed
+            and (block_fills.get(block_id) or 0) >= config.group
+        ]
         if len(missing) > len(state.free_slots):
             raise RuntimeError(
                 "MLA KVarN exact-block pool exhausted: "
@@ -816,12 +822,6 @@ class KVarNMLAStateManager:
         ]
         for _rb in rehydrate_ids:
             cls._audit.log(_rb, "rehydrate", f"st={group_key[-1] if isinstance(group_key, tuple) else group_key}")
-        _orphans = [
-            block_id
-            for block_id in missing
-            if block_id not in state.flushed
-            and (block_fills.get(block_id) or 0) >= config.group
-        ]
         if _orphans:
             if os.environ.get("KVARN_MLA_ORPHAN_RAISE", "0") == "1":
                 _hist = {b: cls._audit.history(b) for b in _orphans[:8]}
