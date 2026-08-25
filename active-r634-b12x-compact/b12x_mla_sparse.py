@@ -2680,7 +2680,7 @@ class B12xMLASparseImpl(MLAAttentionImpl[B12xMLASparseMetadata]):
             KVarNMLAStateManager,
         )
 
-        KVarNMLAStateManager.reset_cache_bindings()
+        KVarNMLAStateManager.rebind_cache_pointers()
 
     def _ensure_kvarn_mla_cache(self, kv_cache: torch.Tensor) -> None:
         if not self._is_kvarn_mla:

@@ -589,6 +589,20 @@ class KVarNMLAStateManager:
         cls._impls.add(impl)
 
     @classmethod
+    def rebind_cache_pointers(cls) -> None:
+        """Drop impl->tensor bindings only; ownership state survives.
+
+        Safe mid-serving (e.g. cudagraph memory profiling re-runs): the KV
+        tensors are NOT reallocated, so mappings/flushed sets must persist.
+        """
+        cls._diag_steps = 0
+        for impl in cls._impls:
+            impl._kvarn_group_key = None
+            impl._kvarn_cache_ref = None  # type: ignore[attr-defined]
+            impl._kvarn_block_to_slot = None  # type: ignore[attr-defined]
+            impl._kvarn_block_to_logical = None  # type: ignore[attr-defined]
+
+    @classmethod
     def reset_cache_bindings(cls) -> None:
         if cls._groups:
             import traceback
@@ -599,6 +613,7 @@ class KVarNMLAStateManager:
                 "".join(traceback.format_stack()[-6:-1]),
             )
         cls._groups.clear()
+        cls.rebind_cache_pointers()
         cls._diag_steps = 0
         for impl in cls._impls:
             impl._kvarn_group_key = None

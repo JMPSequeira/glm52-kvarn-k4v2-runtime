@@ -802,6 +802,11 @@ class GPUModelRunner(LoRAModelRunnerMixin):
 
     def initialize_kv_cache(self, kv_cache_config: KVCacheConfig) -> None:
         self._reset_kv_cache_binding_state()
+        from vllm.v1.attention.backends.mla.kvarn_mla_state import (
+            KVarNMLAStateManager,
+        )
+
+        KVarNMLAStateManager.reset_cache_bindings()
         kv_cache_config = deepcopy(kv_cache_config)
         self.kv_cache_config = kv_cache_config
         self.cache_config.num_gpu_blocks = kv_cache_config.num_blocks
