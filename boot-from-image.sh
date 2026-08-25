@@ -655,6 +655,7 @@ exec podman run --rm --pull=never --replace \
   --env KVARN_MLA_ALPHA="${KVARN_MLA_ALPHA:-}" \
   --env KVARN_MLA_DIAG_PACK_DUMP="${KVARN_MLA_DIAG_PACK_DUMP:-}" \
   --env KVARN_MLA_ORPHAN_RAISE="${KVARN_MLA_ORPHAN_RAISE:-0}" \
+  --env KVARN_MLA_VALUE_WATCH="${KVARN_MLA_VALUE_WATCH:-0}" \
   --env VLLM_USE_B12X_PCIE_DMA=1 \
   --env VLLM_PCIE_ALLREDUCE_BACKEND=b12x \
   --env VLLM_USE_B12X_DCP_A2A=1 \

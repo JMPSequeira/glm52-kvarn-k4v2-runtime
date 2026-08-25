@@ -757,6 +757,40 @@ class KVarNMLAStateManager:
             # prefix-cache hit can restore exact rows from it.
             state.flushed.update(flush_ids)
 
+        # VALUE FORENSICS: a mapped block's pool content may only change
+        # when that block is scheduled (scattered) this step. Any checksum
+        # change on an unscheduled block is the corruption in the act.
+        if os.environ.get("KVARN_MLA_VALUE_WATCH", "0") == "1":
+            _pool = next(
+                (
+                    impl._kvarn_latent_pool
+                    for impl in state.impls
+                    if getattr(impl, "_kvarn_latent_pool", None) is not None
+                ),
+                None,
+            )
+            if _pool is not None:
+                _prev = getattr(state, "slot_sums", None)
+                _sums = {}
+                with torch.no_grad():
+                    _flat = _pool.float().reshape(_pool.shape[0], -1).sum(dim=1)
+                for b, s in state.mapping.items():
+                    _sums[b] = round(_flat[s].item(), 3)
+                state.slot_sums = _sums
+                if _prev is not None:
+                    _bad = [
+                        (b, _prev.get(b), _sums[b])
+                        for b in _sums
+                        if b in _prev
+                        and b not in block_fills
+                        and _prev[b] != _sums[b]
+                    ]
+                    if _bad:
+                        logger.warning(
+                            "KVARN-SILENT-WRITE n=%d ex=%s",
+                            len(_bad),
+                            _bad[:5],
+                        )
         _lost_flushed = [b for b in retired if b in state.flushed]
         if _lost_flushed:
             cls._audit.log(
