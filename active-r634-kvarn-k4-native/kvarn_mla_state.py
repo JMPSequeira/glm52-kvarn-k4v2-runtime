@@ -819,7 +819,7 @@ class KVarNMLAStateManager:
                     detail,
                     len(state.mapping),
                     (
-                        int(selected.view(torch.int64).sum().item())
+                        int(selected.to(torch.int64).sum().item())
                         if selected is not None
                         else -1
                     ),
