@@ -599,6 +599,9 @@ class KVarNMLAStateManager:
         """
         ptr = kv_cache.data_ptr()
         for state in cls._groups.values():
+            prev = getattr(state, "records_ptr", None)
+            if prev is not None and prev != ptr:
+                state.flushed.clear()
             state.records_ptr = ptr
 
     @classmethod
