@@ -742,7 +742,7 @@ exec podman run --rm --pull=never --replace \
   --load-format safetensors \
   --hf-overrides '{"use_index_cache":true,"index_topk_pattern":"FFFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSS"}' \
   --default-chat-template-kwargs '{"reasoning_effort":"high"}' \
-  --compilation-config "{\"cudagraph_mode\":\"FULL_AND_PIECEWISE\",\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]$COMPILATION_PASS_CONFIG}" \
+  --compilation-config "{\"cudagraph_mode\":\"${CUDAGRAPH_MODE_OVERRIDE:-FULL_AND_PIECEWISE}\",\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]$COMPILATION_PASS_CONFIG}" \
   --max-num-seqs "$MAX_NUM_SEQS" \
   --enable-auto-tool-choice \
   --tool-call-parser glm47 \
