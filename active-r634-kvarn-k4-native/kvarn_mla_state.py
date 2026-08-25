@@ -816,9 +816,8 @@ class KVarNMLAStateManager:
                     f"fill>=group. st={group_key}. Audit history: {_hist}"
                 )
             logger.warning(
-                "KVarN provenance-lost re-entry: %d blocks missing AND not "
-                "flushed with published fill>=group (treated as fresh; "
-                "prefix-hit blocks here will read recycled rows): %s",
+                "KVARN-ORPHAN t=%.1f n=%d ids=%s",
+                time.monotonic() - _BOOT_T0,
                 len(_orphans),
                 _orphans[:8],
             )
