@@ -654,6 +654,17 @@ class KVarNMLAStateManager:
         )
         if not impls:
             return
+        # Key the shared state by SPEC IDENTITY, not the calling backend
+        # instance's layer-name tuple: the target instance and the MTP draft
+        # instance serve the SAME cache spec and must share one _GroupState,
+        # or each allocates the same physical blocks in separate states
+        # (provenance-lost orphans; audit 2026-08-25).
+        group_key = (
+            config.bits,
+            config.group,
+            config.latent_dim,
+            config.rope_dim,
+        )
         for impl in impls:
             impl._kvarn_group_key = group_key
 
