@@ -673,12 +673,16 @@ class KVarNMLAStateManager:
 
         for block_id in retired:
             state.free_slots.append(state.mapping.pop(block_id))
-            fill = state.block_fill.pop(block_id, 0)
-            if fill < config.group:
+            fill = state.block_fill.pop(block_id, None)
+            if fill is not None and fill < config.group:
                 # A block retired below full fill has no packed copy of its
                 # current content, so it can never be served from the paged
                 # record.
                 state.flushed.discard(block_id)
+            # A block with NO fill entry (accounting dropped on request
+            # removal or stale-fill guard) that was previously flushed-full
+            # still has a valid packed copy: nothing rewrote it. Keep the
+            # flushed membership so future re-entries restore from it.
 
         missing = sorted(needed.difference(state.mapping))
         if len(missing) > len(state.free_slots):
