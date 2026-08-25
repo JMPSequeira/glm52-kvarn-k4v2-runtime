@@ -28,6 +28,7 @@ ONE ``get_simultaneous`` call so they never alias.
 import inspect
 import math
 import os
+import re
 import weakref
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar, cast
@@ -2942,10 +2943,41 @@ class B12xMLASparseImpl(MLAAttentionImpl[B12xMLASparseMetadata]):
             lse if self.need_to_return_lse_for_decode else None,
         )
 
+    def _kvarn_layer_alpha(self) -> tuple[float, float]:
+        """(alpha, inv_alpha) per layer from KVARN_MLA_ALPHA (store-side lift).
+
+        Format: "layer_idx:alpha,layer_idx:alpha,..." Only listed layers lift;
+        unlisted layers return (1.0, 1.0). Parsed once per impl.
+        """
+        cached = getattr(self, "_kvarn_alpha_pair", None)
+        if cached is not None:
+            return cached
+        pair = (1.0, 1.0)
+        spec = os.environ.get("KVARN_MLA_ALPHA", "")
+        if spec and self._is_kvarn_mla:
+            m = re.search(r"layers\.(\d+)", self.layer_name or "")
+            if m:
+                li = int(m.group(1))
+                for part in spec.split(","):
+                    idx, _, a = part.partition(":")
+                    if idx.strip().isdigit() and int(idx) == li:
+                        try:
+                            av = float(a)
+                            pair = (av, 1.0 / av)
+                        except ValueError:
+                            pass
+                        break
+        self._kvarn_alpha_pair = pair
+        return pair
+
     def _restore_kvarn_mla_output(self, output: torch.Tensor) -> torch.Tensor:
         if not self._is_kvarn_mla:
             return output
-        return kvarn_hadamard(output, self._kvarn_h)
+        out = kvarn_hadamard(output, self._kvarn_h)
+        _, inv = self._kvarn_layer_alpha()
+        if inv != 1.0:
+            out = out * inv
+        return out
 
     def do_kv_cache_update(
         self,
@@ -2989,6 +3021,9 @@ class B12xMLASparseImpl(MLAAttentionImpl[B12xMLASparseMetadata]):
             )
             rotated = self._kvarn_rotated_scratch[:num_tokens]
             kvarn_hadamard(latent, self._kvarn_h, out=rotated)
+            alpha, _ = self._kvarn_layer_alpha()
+            if alpha != 1.0:
+                rotated.mul_(alpha)
             from vllm.v1.attention.ops.kvarn_mla import scatter_kvarn_mla_exact
 
             scatter_kvarn_mla_exact(
@@ -4197,6 +4232,10 @@ class B12xMLASparseImpl(MLAAttentionImpl[B12xMLASparseMetadata]):
                     )
                 )
 
+        if self._is_kvarn_mla:
+            _, q_inv = self._kvarn_layer_alpha()
+            if q_inv != 1.0:
+                q_all[:num_actual_toks, ..., : self.kv_lora_rank].mul_(q_inv)
         assert self.topk_indices_buffer is not None
         topk_indices = self.topk_indices_buffer[:num_actual_toks]
         per_token_cache = attn_metadata.cache_seq_lens_per_token[:num_actual_toks]
@@ -4391,8 +4430,9 @@ class B12xMLASparseImpl(MLAAttentionImpl[B12xMLASparseMetadata]):
                     exact_pool_only=False,
                     fuse_kvarn_hadamard=True,
                 )
+                _, dn_inv = self._kvarn_layer_alpha()
                 return (
-                    out[:num_actual_toks],
+                    out[:num_actual_toks] * dn_inv if dn_inv != 1.0 else out[:num_actual_toks],
                     (
                         lse[:num_actual_toks]
                         if self.need_to_return_lse_for_decode
