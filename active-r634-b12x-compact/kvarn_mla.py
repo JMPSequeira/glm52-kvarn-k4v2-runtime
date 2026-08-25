@@ -329,6 +329,7 @@ def _kvarn_pack_dump_at_exit(
     _pack_dump = os.environ.get("KVARN_MLA_DIAG_PACK_DUMP", "")
     if (
         _pack_dump
+        and id(kv_cache) % 20 == 0
         and block_ids.numel() >= 4
         and globals().setdefault("_PACK_DUMP_COUNT", [0])[0]
         < int(os.environ.get("KVARN_MLA_DIAG_PACK_DUMP_MAX", "400"))
