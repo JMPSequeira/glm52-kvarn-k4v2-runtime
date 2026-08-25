@@ -806,7 +806,16 @@ class GPUModelRunner(LoRAModelRunnerMixin):
             KVarNMLAStateManager,
         )
 
-        KVarNMLAStateManager.reset_cache_bindings()
+        # A mid-serving re-init with UNCHANGED geometry (same block count)
+        # reuses the same cache tensors and pools: KVarN ownership state
+        # (mappings/flushed/mirrors) must survive it, or scheduler-side fills
+        # reference wiped blocks (provenance-lost orphans -> foreign rows).
+        # Full wipe only when the geometry actually changes.
+        _prev_blocks = getattr(self, "_kvarn_prev_num_gpu_blocks", None)
+        _new_blocks = getattr(kv_cache_config, "num_gpu_blocks", None)
+        if _prev_blocks is None or _prev_blocks != _new_blocks:
+            KVarNMLAStateManager.reset_cache_bindings()
+        self._kvarn_prev_num_gpu_blocks = _new_blocks
         kv_cache_config = deepcopy(kv_cache_config)
         self.kv_cache_config = kv_cache_config
         self.cache_config.num_gpu_blocks = kv_cache_config.num_blocks
