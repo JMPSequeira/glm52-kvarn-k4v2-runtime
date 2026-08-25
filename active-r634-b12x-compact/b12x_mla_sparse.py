@@ -4561,8 +4561,17 @@ class B12xMLASparseImpl(MLAAttentionImpl[B12xMLASparseMetadata]):
                         raise RuntimeError(
                             f"CKV prefetch target {target_idx} staging owner expired"
                         )
+                    if (
+                        getattr(target_owner, "kv_cache_dtype", None)
+                        != self.kv_cache_dtype
+                    ):
+                        # Layer-wise mixed KV precision: the target layer packs a
+                        # different record geometry. Staging across the dtype
+                        # boundary reinterprets foreign bytes (the eviction-mode
+                        # corruption); skip the target instead - it gathers
+                        # synchronously on its own forward.
+                        continue
                     for attribute in (
-                        "kv_cache_dtype",
                         "block_size",
                         "dcp_world_size",
                         "_ckv_local_capacity",
