@@ -612,6 +612,8 @@ exec podman run --rm --pull=never --replace \
   --volume "$SRC/active-r634-kvarn-k4-native/kvarn_mla_state.py:/opt/venv/lib/python3.12/site-packages/vllm/v1/attention/backends/mla/kvarn_mla_state.py" \
   --volume "$SRC/active-r634-kvarn-k4-native/kv_cache_manager.py:/opt/venv/lib/python3.12/site-packages/vllm/v1/core/kv_cache_manager.py" \
   --volume "$SRC/active-r634-b12x-compact/kvarn_mla.py:/opt/venv/lib/python3.12/site-packages/vllm/v1/attention/ops/kvarn_mla.py" \
+  --volume "$SRC/active-r634-b12x-compact/config.py:/opt/venv/lib/python3.12/site-packages/vllm/model_executor/layers/quantization/kvarn/config.py" \
+  --volume "$SRC/active-r634-b12x-compact/kvarn_api_k4.py:/opt/venv/lib/python3.12/site-packages/sparkinfer/attention/kvarn_mla/api.py" \
   --volume "$SRC/active-r634-b12x-compact/mla_attention.py:/opt/venv/lib/python3.12/site-packages/vllm/model_executor/layers/attention/mla_attention.py" \
   --volume "$SRC/active-r634-b12x-compact/kv_cache_utils.py:/opt/venv/lib/python3.12/site-packages/vllm/v1/core/kv_cache_utils.py" \
   --volume /home/js/projects/optimize-vllm/vllm/v1/kv_cache_interface.py:/opt/venv/lib/python3.12/site-packages/vllm/v1/kv_cache_interface.py \
@@ -672,6 +674,7 @@ exec podman run --rm --pull=never --replace \
   --env KVARN_MLA_RECORDS_PTR_FIX="${KVARN_MLA_RECORDS_PTR_FIX:-1}" \
   --env KVARN_MLA_SKIP_LEN_GATE="${KVARN_MLA_SKIP_LEN_GATE:-0}" \
   --env KVARN_SCHED_TRACE="${KVARN_SCHED_TRACE:-0}" \
+  --env KVARN_FP8_ROPE_RECORD="${KVARN_FP8_ROPE_RECORD:-0}" \
   --env VLLM_USE_B12X_PCIE_DMA=1 \
   --env VLLM_PCIE_ALLREDUCE_BACKEND=b12x \
   --env VLLM_USE_B12X_DCP_A2A=1 \
