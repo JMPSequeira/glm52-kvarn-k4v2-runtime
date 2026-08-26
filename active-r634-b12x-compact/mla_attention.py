@@ -723,18 +723,6 @@ class KVarNMLALayerWatch:
             cls.sums.append(
                 (layer, round(float(out.detach().float().abs().sum().item()), 1))
             )
-        if len(cls.sums) >= 500000:
-            cls.flush("auto")
-
-    @classmethod
-    def maybe_flush_marker(cls):
-        import pathlib
-
-        mp = pathlib.Path("/tmp/KVARN_LAYER_FLUSH")
-        if mp.exists():
-            tag = mp.read_text().strip() or "mark"
-            mp.unlink()
-            cls.flush(tag)
 
     @classmethod
     def flush(cls, tag):
@@ -1162,7 +1150,6 @@ class MLAAttention(nn.Module, AttentionLayerBase):
         )
         if os.environ.get("KVARN_MLA_LAYER_WATCH", "0") == "1":
             KVarNMLALayerWatch.log(self.layer_name, _out)
-            KVarNMLALayerWatch.maybe_flush_marker()
         return _out
 
     def _forward_orig(
