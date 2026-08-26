@@ -160,6 +160,11 @@ _KVARN_PACKED_TILE_GEOMETRY_FP8: dict[int, tuple[int, ...]] = {
 }
 
 
+_KVARN_FP8_ROPE_BYPASS = (
+    __import__("os").environ.get("KVARN_FP8_ROPE_BYPASS", "0") == "1"
+)
+
+
 def _kvarn_fp8_rope_enabled() -> bool:
     import os
 
@@ -1933,7 +1938,10 @@ class UnifiedDecodeKernel:
                             s_row_offset=s_row_off,
                             rope_offset=rope_off,
                             rope_amax_offset=rope_amax_off,
-                            fp8_rope=_kvarn_fp8_rope_enabled(),
+                            fp8_rope=(
+                                _kvarn_fp8_rope_enabled()
+                                and not _KVARN_FP8_ROPE_BYPASS
+                            ),
                             kv_smem_stride=staged_kv_stride,
                             rope_smem_stride=t.d_rope,
                             io_threads=self.io_threads,
