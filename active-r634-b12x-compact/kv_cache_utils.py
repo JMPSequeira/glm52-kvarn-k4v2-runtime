@@ -1055,7 +1055,14 @@ def _get_kvarn_mla_workspace_config(
     else:
         geometry = next(iter(geometries))
         workspace_config = geometries[geometry]
-    if geometry[0] != 64 or geometry[4] not in (18_560, 26_752, 30_848):
+    if geometry[0] != 64 or geometry[4] not in (
+        18_560,
+        26_752,
+        30_848,
+        14_592,
+        22_784,
+        26_880,
+    ):
         raise ValueError(
             "Unsupported KVarN MLA cache geometry: "
             f"block_size={geometry[0]}, page_size_bytes={geometry[4]}"
