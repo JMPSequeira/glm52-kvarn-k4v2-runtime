@@ -578,6 +578,7 @@ def pack_kvarn_mla_blocks(
 
 
 
+@triton.jit
 def _materialize_selected_kvarn_mla_kernel(
     selected_ptr,
     cache_ptr,
