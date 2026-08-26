@@ -580,6 +580,7 @@ class _GroupState:
     block_fill: dict[int, int] = field(default_factory=dict)
     mirrors: dict[torch.device, torch.Tensor] = field(default_factory=dict)
     flushed: set[int] = field(default_factory=set)
+    records_ptrs: dict[int, int] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.free_slots = list(range(self.pool_size - 1, -1, -1))
@@ -598,16 +599,31 @@ class KVarNMLAStateManager:
         cls._impls.add(impl)
 
     @classmethod
-    def validate_records_storage(cls, kv_cache) -> None:
+    def validate_records_storage(cls, kv_cache, impl_id=None) -> None:
         """Drop flushed membership if the paged record tensor was reallocated.
 
         Mapping (exact pool rows, impl-side) survives reallocation; packed
         records do not. Restoring from wiped records yields zeros - detect
         the storage change at first re-bind and retire only the record
         provenance.
+
+        The pointer is keyed per impl: each layer binds its own paged tensor,
+        and a single shared slot makes alternating impls look like a
+        reallocation, wiping flushed membership every rebind cycle.
         """
         ptr = kv_cache.data_ptr()
+        per_impl = (
+            impl_id is not None
+            and os.environ.get("KVARN_MLA_RECORDS_PTR_FIX", "0") == "1"
+        )
         for state in cls._groups.values():
+            if per_impl:
+                known = state.records_ptrs.get(impl_id)
+                if known is not None and known != ptr:
+                    state.flushed.clear()
+                    state.records_ptrs.clear()
+                state.records_ptrs[impl_id] = ptr
+                continue
             prev = getattr(state, "records_ptr", None)
             if prev is not None and prev != ptr:
                 state.flushed.clear()
