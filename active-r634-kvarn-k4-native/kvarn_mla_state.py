@@ -614,7 +614,7 @@ class KVarNMLAStateManager:
         ptr = kv_cache.data_ptr()
         per_impl = (
             impl_id is not None
-            and os.environ.get("KVARN_MLA_RECORDS_PTR_FIX", "0") == "1"
+            and os.environ.get("KVARN_MLA_RECORDS_PTR_FIX", "1") == "1"
         )
         for state in cls._groups.values():
             if per_impl:
