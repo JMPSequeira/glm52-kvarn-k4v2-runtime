@@ -178,11 +178,15 @@ PROFILER_ARGS=()
 SPECULATIVE_ARGS=()
 KV_TRANSFER_ARGS=()
 HIDDEN_STATES_MOUNT_ARGS=()
+SCHED_RESERVE_FULL_ISL=${SCHED_RESERVE_FULL_ISL:-1}
 SCHEDULER_ARGS=(
   --enable-chunked-prefill
   --enable-prefix-caching
   --async-scheduling
 )
+if [[ $SCHED_RESERVE_FULL_ISL != 1 ]]; then
+  SCHEDULER_ARGS+=(--scheduler-reserve-full-isl False)
+fi
 if (( DISABLE_PREFIX_CACHING )); then
   SCHEDULER_ARGS=(
     --enable-chunked-prefill
