@@ -28,6 +28,7 @@ ONE ``get_simultaneous`` call so they never alias.
 import inspect
 import math
 import os
+import json
 import re
 import weakref
 from dataclasses import dataclass
@@ -2978,6 +2979,26 @@ class B12xMLASparseImpl(MLAAttentionImpl[B12xMLASparseMetadata]):
         _, inv = self._kvarn_layer_alpha()
         if inv != 1.0:
             out = out * inv
+        if os.environ.get("KVARN_MLA_LAYER_WATCH", "0") == "1":
+            import pathlib
+
+            with open("/tmp/layerwatch.jsonl", "a") as f:
+                f.write(
+                    json.dumps(
+                        {
+                            "layer": self.layer_name,
+                            "sum": round(
+                                float(out.detach().float().abs().sum().item()), 1
+                            ),
+                        }
+                    )
+                    + "\n"
+                )
+            _mp = pathlib.Path("/tmp/KVARN_LAYER_FLUSH")
+            if _mp.exists():
+                _mp.unlink()
+                _mp.parent.mkdir(parents=True, exist_ok=True)
+                _mp.with_suffix(".flushed").touch()
         return out
 
     def do_kv_cache_update(
