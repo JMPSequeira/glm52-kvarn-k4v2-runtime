@@ -13,6 +13,10 @@ _K5_BITS = 5
 _K5_TILE_BYTES = 30_848
 _K4_TILE_BYTES = tl.constexpr(26_752)
 _K2_TILE_BYTES = tl.constexpr(18_560)
+# fp8-RoPE record variants (E4M3 payload + per-token fp16 amax sidecar)
+_K5_TILE_BYTES_FP8 = 26_880
+_K4_TILE_BYTES_FP8 = tl.constexpr(22_784)
+_K2_TILE_BYTES_FP8 = tl.constexpr(14_592)
 _K5_S_COL_OFFSET = 20_480
 _K5_ZP_OFFSET = 21_504
 _K5_S_ROW_OFFSET = 22_528
@@ -1360,6 +1364,9 @@ def native_packed_k5_decode(
         int(_K2_TILE_BYTES): 2,
         int(_K4_TILE_BYTES): 4,
         int(_K5_TILE_BYTES): 5,
+        int(_K2_TILE_BYTES_FP8): 2,
+        int(_K4_TILE_BYTES_FP8): 4,
+        int(_K5_TILE_BYTES_FP8): 5,
     }
     packed_bits = packed_bits_by_tile.get(tile_bytes)
     if (
