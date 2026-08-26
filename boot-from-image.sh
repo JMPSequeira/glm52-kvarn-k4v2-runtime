@@ -612,6 +612,7 @@ exec podman run --rm --pull=never --replace \
   --volume /home/js/projects/optimize-vllm/vllm/v1/kv_cache_interface.py:/opt/venv/lib/python3.12/site-packages/vllm/v1/kv_cache_interface.py \
   --volume /home/js/projects/optimize-vllm/vllm/v1/core/kv_cache_coordinator.py:/opt/venv/lib/python3.12/site-packages/vllm/v1/core/kv_cache_coordinator.py \
   --volume /home/js/projects/optimize-vllm/vllm/v1/core/sched/scheduler.py:/opt/venv/lib/python3.12/site-packages/vllm/v1/core/sched/scheduler.py \
+  --volume /home/js/projects/optimize-vllm/vllm/v1/core/single_type_kv_cache_manager.py:/opt/venv/lib/python3.12/site-packages/vllm/v1/core/single_type_kv_cache_manager.py \
   --volume /home/js/projects/optimize-vllm/vllm/v1/worker/utils.py:/opt/venv/lib/python3.12/site-packages/vllm/v1/worker/utils.py \
   --network host --ipc host --security-opt label=disable \
   --pids-limit 4096 \
@@ -659,6 +660,7 @@ exec podman run --rm --pull=never --replace \
   --env KVARN_MLA_VALUE_WATCH="${KVARN_MLA_VALUE_WATCH:-0}" \
   --env KVARN_MLA_LAYER_WATCH="${KVARN_MLA_LAYER_WATCH:-0}" \
   --env KVARN_APC_HIT_LOG="${KVARN_APC_HIT_LOG:-0}" \
+  --env KVARN_GAP_FREE_STRIP_HASH="${KVARN_GAP_FREE_STRIP_HASH:-0}" \
   --env VLLM_USE_B12X_PCIE_DMA=1 \
   --env VLLM_PCIE_ALLREDUCE_BACKEND=b12x \
   --env VLLM_USE_B12X_DCP_A2A=1 \
