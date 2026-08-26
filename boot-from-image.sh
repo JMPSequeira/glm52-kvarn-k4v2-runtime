@@ -185,7 +185,7 @@ SCHEDULER_ARGS=(
   --async-scheduling
 )
 if [[ $SCHED_RESERVE_FULL_ISL != 1 ]]; then
-  SCHEDULER_ARGS+=(--scheduler-reserve-full-isl False)
+  SCHEDULER_ARGS+=(--no-scheduler-reserve-full-isl)
 fi
 if (( DISABLE_PREFIX_CACHING )); then
   SCHEDULER_ARGS=(
