@@ -178,6 +178,8 @@ def _serialize_kvarn_mla_blocks_kernel(
     ZP_OFFSET: tl.constexpr,
     S_ROW_OFFSET: tl.constexpr,
     ROPE_OFFSET: tl.constexpr,
+    ROPE_AMAX_OFFSET: tl.constexpr,
+    FP8_ROPE: tl.constexpr,
     AFFINE_REFIT: tl.constexpr,
 ):
     program = tl.program_id(0)
@@ -274,13 +276,30 @@ def _serialize_kvarn_mla_blocks_kernel(
         + row * rope_pool_stride_t
         + shared_offsets,
         mask=(row < GROUP) & (shared_offsets < ROPE_DIM),
-    )
-    rope_record = (record + ROPE_OFFSET).to(tl.pointer_type(tl.bfloat16))
-    tl.store(
-        rope_record + row * ROPE_DIM + shared_offsets,
-        rope,
-        mask=(row < GROUP) & (shared_offsets < ROPE_DIM),
-    )
+        other=0.0,
+    ).to(tl.float32)
+    if FP8_ROPE:
+        amax_row = tl.maximum(tl.max(tl.abs(rope), axis=0), 1e-12)
+        q_rope = (rope / amax_row).to(tl.float8e4nv)
+        q_ptr = (record + ROPE_OFFSET).to(tl.pointer_type(tl.float8e4nv))
+        tl.store(
+            q_ptr + row * ROPE_DIM + shared_offsets,
+            q_rope,
+            mask=(row < GROUP) & (shared_offsets < ROPE_DIM),
+        )
+        amax_ptr = (record + ROPE_AMAX_OFFSET).to(tl.pointer_type(tl.float16))
+        tl.store(
+            amax_ptr + row,
+            amax_row.to(tl.float16),
+            mask=row < GROUP,
+        )
+    else:
+        rope_record = (record + ROPE_OFFSET).to(tl.pointer_type(tl.bfloat16))
+        tl.store(
+            rope_record + row * ROPE_DIM + shared_offsets,
+            rope.to(tl.bfloat16),
+            mask=(row < GROUP) & (shared_offsets < ROPE_DIM),
+        )
 
 
 def _serialize_kvarn_mla_blocks(
@@ -318,6 +337,8 @@ def _serialize_kvarn_mla_blocks(
         ZP_OFFSET=config.latent_zp_offset,
         S_ROW_OFFSET=config.latent_s_row_offset,
         ROPE_OFFSET=config.rope_offset,
+        ROPE_AMAX_OFFSET=config.rope_amax_offset,
+        FP8_ROPE=config.fp8_rope_record,
         AFFINE_REFIT=os.environ.get("KVARN_AFFINE_REFIT", "1") == "1",
         num_warps=4,
     )
@@ -582,6 +603,8 @@ def _materialize_selected_kvarn_mla_kernel(
     ZP_OFFSET: tl.constexpr,
     S_ROW_OFFSET: tl.constexpr,
     ROPE_OFFSET: tl.constexpr,
+    ROPE_AMAX_OFFSET: tl.constexpr,
+    FP8_ROPE: tl.constexpr,
     BLOCK_D: tl.constexpr,
 ):
     row = tl.program_id(0)
@@ -636,12 +659,25 @@ def _materialize_selected_kvarn_mla_kernel(
 
     rope_cols = cols - LATENT_DIM
     rope_mask = col_mask & (cols >= LATENT_DIM)
-    body_rope_ptr = (record + ROPE_OFFSET).to(tl.pointer_type(tl.bfloat16))
-    body_rope = tl.load(
-        body_rope_ptr + token * ROPE_DIM + rope_cols,
-        mask=rope_mask & valid_block & ~exact,
-        other=0.0,
-    ).to(tl.float32)
+    if FP8_ROPE:
+        q_ptr = (record + ROPE_OFFSET).to(tl.pointer_type(tl.float8e4nv))
+        q_rope = tl.load(
+            q_ptr + token * ROPE_DIM + rope_cols,
+            mask=rope_mask & valid_block & ~exact,
+            other=0.0,
+        ).to(tl.float32)
+        amax_ptr = (record + ROPE_AMAX_OFFSET).to(tl.pointer_type(tl.float16))
+        rope_amax = tl.load(
+            amax_ptr + token, mask=valid_block & ~exact, other=0.0
+        ).to(tl.float32)
+        body_rope = q_rope * rope_amax
+    else:
+        body_rope_ptr = (record + ROPE_OFFSET).to(tl.pointer_type(tl.bfloat16))
+        body_rope = tl.load(
+            body_rope_ptr + token * ROPE_DIM + rope_cols,
+            mask=rope_mask & valid_block & ~exact,
+            other=0.0,
+        ).to(tl.float32)
     exact_rope = tl.load(
         rope_pool_ptr
         + safe_pool_slot * rope_pool_stride_s
@@ -746,6 +782,8 @@ def materialize_selected_kvarn_mla(
         ZP_OFFSET=config.latent_zp_offset,
         S_ROW_OFFSET=config.latent_s_row_offset,
         ROPE_OFFSET=config.rope_offset,
+        ROPE_AMAX_OFFSET=config.rope_amax_offset,
+        FP8_ROPE=config.fp8_rope_record,
         BLOCK_D=64,
         num_warps=4,
     )
@@ -780,6 +818,8 @@ def _rehydrate_kvarn_mla_blocks_kernel(
     ZP_OFFSET: tl.constexpr,
     S_ROW_OFFSET: tl.constexpr,
     ROPE_OFFSET: tl.constexpr,
+    ROPE_AMAX_OFFSET: tl.constexpr,
+    FP8_ROPE: tl.constexpr,
 ):
     """Rebuild exact pool rows for one packed block from its paged record.
 
@@ -815,13 +855,24 @@ def _rehydrate_kvarn_mla_blocks_kernel(
 
     rope_cols = tl.arange(0, BLOCK_R)
     rope_mask = rope_cols < ROPE_DIM
-    body_rope = tl.load(
-        (record + ROPE_OFFSET).to(tl.pointer_type(tl.bfloat16))
-        + token * ROPE_DIM
-        + rope_cols,
-        mask=rope_mask,
-        other=0.0,
-    )
+    if FP8_ROPE:
+        q_ptr = (record + ROPE_OFFSET).to(tl.pointer_type(tl.float8e4nv))
+        q_rope = tl.load(
+            q_ptr + token * ROPE_DIM + rope_cols,
+            mask=rope_mask,
+            other=0.0,
+        ).to(tl.float32)
+        amax_ptr = (record + ROPE_AMAX_OFFSET).to(tl.pointer_type(tl.float16))
+        rope_amax = tl.load(amax_ptr + token).to(tl.float32)
+        body_rope = q_rope * rope_amax
+    else:
+        body_rope = tl.load(
+            (record + ROPE_OFFSET).to(tl.pointer_type(tl.bfloat16))
+            + token * ROPE_DIM
+            + rope_cols,
+            mask=rope_mask,
+            other=0.0,
+        )
     tl.store(
         rope_pool_ptr
         + slot * rope_pool_stride_s
@@ -906,6 +957,8 @@ def rehydrate_kvarn_mla_blocks(
         ZP_OFFSET=config.latent_zp_offset,
         S_ROW_OFFSET=config.latent_s_row_offset,
         ROPE_OFFSET=config.rope_offset,
+        ROPE_AMAX_OFFSET=config.rope_amax_offset,
+        FP8_ROPE=config.fp8_rope_record,
         num_warps=4,
     )
     if (
