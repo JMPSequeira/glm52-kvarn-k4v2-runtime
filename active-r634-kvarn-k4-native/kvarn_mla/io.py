@@ -2,13 +2,6 @@
 
 import os as _os
 
-_KVARN_FP8_LATENT_CONST = (
-    __import__("os").environ.get("KVARN_FP8_LATENT_CONST", "") == "1"
-)
-
-_KVARN_FP8_ROPE_DEBUG_CONST = (
-    _os.environ.get("KVARN_FP8_ROPE_DEBUG_CONST", "") == "1"
-)
 from __future__ import annotations
 
 import cutlass
@@ -32,6 +25,16 @@ from sparkinfer._lib.intrinsics import (
     st_shared_u16,
     st_shared_u32,
     st_shared_v4_u32,
+)
+
+import os as _kvarn_io_os
+
+_KVARN_FP8_LATENT_CONST = (
+    _kvarn_io_os.environ.get("KVARN_FP8_LATENT_CONST", "") == "1"
+)
+
+_KVARN_FP8_ROPE_DEBUG_CONST = (
+    _kvarn_io_os.environ.get("KVARN_FP8_ROPE_DEBUG_CONST", "") == "1"
 )
 
 _GROUP = 64
