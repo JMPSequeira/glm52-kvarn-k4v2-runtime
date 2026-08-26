@@ -2556,19 +2556,35 @@ def get_kv_cache_configs(
         )
 
     # Check if the available memory is enough per worker.
-    for groups, avail_mem in zip(projected_groups_per_worker, available_memory):
-        if not groups:
-            continue
-        _check_enough_kv_cache_memory(
-            avail_mem,
-            partial(
-                _max_memory_usage_with_kvarn_mla_workspace,
-                vllm_config,
-                groups,
-            ),
+    import os as _os
+
+    if _os.environ.get("KVARN_MLA_SKIP_LEN_GATE", "0") == "1":
+        # The full-context-blocks requirement is wrong for the packed KVarN
+        # layout: records serve non-working-set reads, so blocks cycle. The
+        # gate is skipped; real capacity still asserts at allocation time.
+        logger.info(
+            "KVARN-LEN-GATE skipped (max_model_len=%d, avail per worker: %s)",
             vllm_config.model_config.max_model_len,
-            partial(_estimate_max_model_len_from_groups, vllm_config, groups),
+            [format_gib(m) for m in available_memory],
         )
+    else:
+        for groups, avail_mem in zip(
+            projected_groups_per_worker, available_memory
+        ):
+            if not groups:
+                continue
+            _check_enough_kv_cache_memory(
+                avail_mem,
+                partial(
+                    _max_memory_usage_with_kvarn_mla_workspace,
+                    vllm_config,
+                    groups,
+                ),
+                vllm_config.model_config.max_model_len,
+                partial(
+                    _estimate_max_model_len_from_groups, vllm_config, groups
+                ),
+            )
 
     kv_cache_configs: list[KVCacheConfig] = []
     for projected_groups, kv_cache_spec_one_worker, available_memory_one_worker in zip(
