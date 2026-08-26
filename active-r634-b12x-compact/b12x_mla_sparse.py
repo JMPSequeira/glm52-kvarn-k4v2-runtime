@@ -4456,8 +4456,32 @@ class B12xMLASparseImpl(MLAAttentionImpl[B12xMLASparseMetadata]):
                     fuse_kvarn_hadamard=True,
                 )
                 _, dn_inv = self._kvarn_layer_alpha()
+                _dec_out = (
+                    out[:num_actual_toks] * dn_inv
+                    if dn_inv != 1.0
+                    else out[:num_actual_toks]
+                )
+                if (
+                    os.environ.get("KVARN_MLA_LAYER_WATCH", "0") == "1"
+                    and not torch.cuda.is_current_stream_capturing()
+                ):
+                    with open("/tmp/layerwatch_decode.jsonl", "a") as f:
+                        f.write(
+                            json.dumps(
+                                {
+                                    "layer": self.layer_name,
+                                    "sum": round(
+                                        float(
+                                            _dec_out.detach().float().abs().sum().item()
+                                        ),
+                                        1,
+                                    ),
+                                }
+                            )
+                            + "\n"
+                        )
                 return (
-                    out[:num_actual_toks] * dn_inv if dn_inv != 1.0 else out[:num_actual_toks],
+                    _dec_out,
                     (
                         lse[:num_actual_toks]
                         if self.need_to_return_lse_for_decode
