@@ -743,6 +743,18 @@ class KVarNMLAStateManager:
                 state.block_fill[block_id] = fill
 
         retired = [block_id for block_id in state.mapping if block_id not in needed]
+        if os.environ.get("KVARN_MLA_TOPOLOGY_LOG", "0") == "1":
+            logger.warning(
+                "KVARN-TOPO st=%s needed=%d mapping=%d retired=%d "
+                "flushed=%d free=%d fills=%d",
+                group_key[1] if len(group_key) > 1 else group_key,
+                len(needed),
+                len(state.mapping),
+                len(retired),
+                len(state.flushed),
+                len(state.free_slots),
+                len(block_fills),
+            )
         if os.environ.get("KVARN_MLA_FLUSH_ALL", "0") == "1":
             # Tracker fills resolve asynchronously and lag retirement; the
             # pool rows are authoritative at retire time. Serialize every
