@@ -4138,6 +4138,31 @@ class B12xMLASparseImpl(MLAAttentionImpl[B12xMLASparseMetadata]):
             self.device.index if self.device.index is not None else 0,
         )
 
+    # MLAAttentionImpl protocol entry: forward() -> forward_mqa_wrapper
+    forward = None  # set after class body
+
+    def forward_mqa_wrapper(self, *args, **kwargs):
+        _out = self.forward_mqa(*args, **kwargs)
+        if (
+            os.environ.get("KVARN_MLA_LAYER_WATCH", "0") == "1"
+            and not torch.cuda.is_current_stream_capturing()
+        ):
+            _o = _out[0] if isinstance(_out, tuple) else _out
+            if isinstance(_o, torch.Tensor) and _o.numel() > 0:
+                with open("/tmp/layerwatch_decode.jsonl", "a") as f:
+                    f.write(
+                        json.dumps(
+                            {
+                                "layer": self.layer_name,
+                                "sum": round(
+                                    float(_o.detach().float().abs().sum().item()), 1
+                                ),
+                            }
+                        )
+                        + "\n"
+                    )
+        return _out
+
     def forward_mqa(
         self,
         q: torch.Tensor | tuple[torch.Tensor, torch.Tensor],
@@ -4816,3 +4841,6 @@ class B12xMLASparseImpl(MLAAttentionImpl[B12xMLASparseMetadata]):
                 if lse is not None:
                     lse = lse[:, : self._input_num_heads]
         return self._restore_kvarn_mla_output(out), lse
+
+
+B12xMLASparseImpl.forward = B12xMLASparseImpl.forward_mqa_wrapper
