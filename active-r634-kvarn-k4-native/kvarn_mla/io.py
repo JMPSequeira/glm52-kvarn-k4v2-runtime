@@ -1,4 +1,10 @@
 """CuTeDSL cooperative producer for native KVarN MLA decode."""
+
+import os as _os
+
+_KVARN_FP8_ROPE_DEBUG_CONST = (
+    _os.environ.get("KVARN_FP8_ROPE_DEBUG_CONST", "") == "1"
+)
 from __future__ import annotations
 
 import cutlass
@@ -442,16 +448,30 @@ def io_issue_kvarn_k5_gather(
                             f2, f3 = f16x2_to_f32x2(
                                 cvt_bf16x2_to_f16x2(bf1)
                             )
-                            st_shared_bf16_from_f32(dst, f0 * amax_lo)
-                            st_shared_bf16_from_f32(
-                                dst + Int32(2), f1 * amax_lo
-                            )
-                            st_shared_bf16_from_f32(
-                                dst + Int32(4), f2 * amax_lo
-                            )
-                            st_shared_bf16_from_f32(
-                                dst + Int32(6), f3 * amax_lo
-                            )
+                            if cutlass.const_expr(
+                                _KVARN_FP8_ROPE_DEBUG_CONST
+                            ):
+                                st_shared_bf16_from_f32(dst, Float32(1.0))
+                                st_shared_bf16_from_f32(
+                                    dst + Int32(2), Float32(1.0)
+                                )
+                                st_shared_bf16_from_f32(
+                                    dst + Int32(4), Float32(1.0)
+                                )
+                                st_shared_bf16_from_f32(
+                                    dst + Int32(6), Float32(1.0)
+                                )
+                            else:
+                                st_shared_bf16_from_f32(dst, f0 * amax_lo)
+                                st_shared_bf16_from_f32(
+                                    dst + Int32(2), f1 * amax_lo
+                                )
+                                st_shared_bf16_from_f32(
+                                    dst + Int32(4), f2 * amax_lo
+                                )
+                                st_shared_bf16_from_f32(
+                                    dst + Int32(6), f3 * amax_lo
+                                )
                         elif exact:
                             exact_rope_offset = (
                                 (pool_slot.to(Int64) * Int64(_GROUP) + token.to(Int64))
