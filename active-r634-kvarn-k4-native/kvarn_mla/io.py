@@ -2,6 +2,10 @@
 
 import os as _os
 
+_KVARN_FP8_LATENT_CONST = (
+    __import__("os").environ.get("KVARN_FP8_LATENT_CONST", "") == "1"
+)
+
 _KVARN_FP8_ROPE_DEBUG_CONST = (
     _os.environ.get("KVARN_FP8_ROPE_DEBUG_CONST", "") == "1"
 )
@@ -291,7 +295,10 @@ def io_issue_kvarn_k5_gather(
             while dim < Int32(_LATENT_DIM):
                 value0 = Float32(0.0)
                 value1 = Float32(0.0)
-                if packed:
+                if packed and cutlass.const_expr(_KVARN_FP8_LATENT_CONST):
+                    value0 = Float32(1.0)
+                    value1 = Float32(1.0)
+                elif packed:
                     byte_position0 = (
                         dim * Int32((_GROUP * packed_bits) // 8) + token_byte
                     )
