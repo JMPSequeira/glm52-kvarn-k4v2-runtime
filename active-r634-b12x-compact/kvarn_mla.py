@@ -358,6 +358,26 @@ def _kvarn_pack_dump_at_exit(
         _logger.warning("KVarN pack dump #%d -> %s", globals()["_PACK_DUMP_COUNT"][0], _dump_path)
 
 
+def encode_rope_fp8_block(rope_tile: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """Quantize one [group, rope_dim] RoPE tile to E4M3 + per-token amax."""
+    amax = (
+        rope_tile.abs().amax(dim=-1, keepdim=True).clamp(min=1e-12).half()
+    )
+    q = (rope_tile / amax.half()).to(torch.float8_e4m3fn)
+    return q, amax
+
+
+def decode_rope_fp8_block(
+    record: torch.Tensor, config: "KVarNMLAConfig"
+) -> torch.Tensor:
+    """Dequantize one block's fp8 RoPE section back to float32 [group, rope_dim]."""
+    q = record[config.rope_offset : config.rope_offset + config.group * config.rope_dim]
+    amax = record[config.rope_amax_offset : config.rope_amax_offset + config.group * 2]
+    q = q.view(torch.float8_e4m3fn).view(config.group, config.rope_dim)
+    amax = amax.view(torch.float16).view(config.group, 1)
+    return q.float() * amax.float()
+
+
 def pack_kvarn_mla_blocks(
     kv_cache: torch.Tensor,
     latent_pool: torch.Tensor,
@@ -409,10 +429,21 @@ def pack_kvarn_mla_blocks(
     records[:, config.latent_s_row_offset : config.rope_offset].copy_(
         packed["s_row_K"].contiguous().view(torch.uint8)
     )
-    rope = rope_pool.index_select(0, pool_slots).to(torch.bfloat16).contiguous()
-    records[:, config.rope_offset :].copy_(
-        rope.view(torch.uint8).reshape(num_blocks, -1)
-    )
+    if config.fp8_rope_record:
+        rope = rope_pool.index_select(0, pool_slots).float()
+        for i in range(num_blocks):
+            q, amax = encode_rope_fp8_block(rope[i])
+            records[
+                i, config.rope_offset : config.rope_amax_offset
+            ].copy_(q.view(torch.uint8).reshape(-1))
+            records[
+                i, config.rope_amax_offset : config.rope_amax_offset + config.group * 2
+            ].copy_(amax.view(torch.uint8).reshape(-1))
+    else:
+        rope = rope_pool.index_select(0, pool_slots).to(torch.bfloat16).contiguous()
+        records[:, config.rope_offset :].copy_(
+            rope.view(torch.uint8).reshape(num_blocks, -1)
+        )
     kv_cache.view(torch.uint8).reshape(kv_cache.shape[0], -1).index_copy_(
         0, block_ids, records
     )

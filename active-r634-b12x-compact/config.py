@@ -605,8 +605,22 @@ class KVarNMLAConfig:
         return (2 * self.latent_dim + self.group) * 2
 
     @property
+    def fp8_rope_record(self) -> bool:
+        import os
+
+        return os.environ.get("KVARN_FP8_ROPE_RECORD", "0") == "1"
+
+    @property
     def rope_bytes(self) -> int:
+        # E4M3 payload + per-token fp16 amax sidecar; halves the RoPE section
+        # (62 B/token at latent 512 / rope 64 / group 64).
+        if self.fp8_rope_record:
+            return self.group * self.rope_dim + self.group * 2
         return self.group * self.rope_dim * 2
+
+    @property
+    def rope_amax_offset(self) -> int:
+        return self.rope_offset + self.group * self.rope_dim
 
     @property
     def latent_s_col_offset(self) -> int:
