@@ -2016,6 +2016,9 @@ class B12xMLASparseImpl(MLAAttentionImpl[B12xMLASparseMetadata]):
                     (64, 512, 64, 2, 18_560),
                     (64, 512, 64, 4, 26_752),
                     (64, 512, 64, 5, 30_848),
+                    (64, 512, 64, 2, 14_592),
+                    (64, 512, 64, 4, 22_784),
+                    (64, 512, 64, 5, 26_880),
                 }
                 or self.tp_world_size != 4
                 or self.dcp_world_size != 4
