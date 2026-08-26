@@ -791,6 +791,23 @@ class KVarNMLAStateManager:
                             len(_bad),
                             _bad[:5],
                         )
+        # READ-ASSEMBLY FORENSICS: the decode reader uses the mirror tensor
+        # (impl._kvarn_block_to_slot). Any divergence mirror!=mapping means
+        # correct pool values read under the wrong block identity.
+        if os.environ.get("KVARN_MLA_VALUE_WATCH", "0") == "1":
+            for dev_key, mirror in state.mirrors.items():
+                _mmap = mirror.detach().to("cpu", torch.int64).tolist()
+                _div = [
+                    (b, state.mapping[b], _mmap[b] if b < len(_mmap) else None)
+                    for b in state.mapping
+                    if b >= len(_mmap) or _mmap[b] != state.mapping[b]
+                ]
+                if _div:
+                    logger.warning(
+                        "KVARN-MIRROR-DIVERGENCE n=%d ex=%s",
+                        len(_div),
+                        _div[:5],
+                    )
         _lost_flushed = [b for b in retired if b in state.flushed]
         if _lost_flushed:
             cls._audit.log(
