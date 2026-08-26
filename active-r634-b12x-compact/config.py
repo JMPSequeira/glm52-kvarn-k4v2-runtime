@@ -715,6 +715,11 @@ class KVarNMLAConfig:
             (64, 512, 64, 2, 18_560),
             (64, 512, 64, 4, 26_752),
             (64, 512, 64, 5, 30_848),
+            # fp8-RoPE record variants: paged tile shrinks; workspace math
+            # is identical to the same-bits bf16 layout.
+            (64, 512, 64, 2, 14_592),
+            (64, 512, 64, 4, 22_784),
+            (64, 512, 64, 5, 26_880),
         }
         if geometry not in supported:
             raise ValueError(
