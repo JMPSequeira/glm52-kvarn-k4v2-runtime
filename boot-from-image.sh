@@ -614,6 +614,7 @@ exec podman run --rm --pull=never --replace \
   --volume "$SRC/active-r634-b12x-compact/kvarn_mla.py:/opt/venv/lib/python3.12/site-packages/vllm/v1/attention/ops/kvarn_mla.py" \
   --volume "$SRC/active-r634-b12x-compact/config.py:/opt/venv/lib/python3.12/site-packages/vllm/model_executor/layers/quantization/kvarn/config.py" \
   --volume "$SRC/active-r634-b12x-compact/kvarn_api_k4.py:/opt/venv/lib/python3.12/site-packages/sparkinfer/attention/kvarn_mla/api.py" \
+  --volume "$SRC/active-r634-kvarn-k4-native/_shared/mla/kernel.py:/opt/venv/lib/python3.12/site-packages/sparkinfer/attention/_shared/mla/kernel.py" \
   --volume "$SRC/active-r634-b12x-compact/mla_attention.py:/opt/venv/lib/python3.12/site-packages/vllm/model_executor/layers/attention/mla_attention.py" \
   --volume "$SRC/active-r634-b12x-compact/kv_cache_utils.py:/opt/venv/lib/python3.12/site-packages/vllm/v1/core/kv_cache_utils.py" \
   --volume /home/js/projects/optimize-vllm/vllm/v1/kv_cache_interface.py:/opt/venv/lib/python3.12/site-packages/vllm/v1/kv_cache_interface.py \
