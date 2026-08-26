@@ -1,7 +1,5 @@
 """CuTeDSL cooperative producer for native KVarN MLA decode."""
 
-import os as _os
-
 from __future__ import annotations
 
 import cutlass
