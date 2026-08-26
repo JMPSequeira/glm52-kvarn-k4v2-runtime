@@ -189,7 +189,6 @@ return curr_o @ W_O
 
 import functools
 import os
-import json
 import re
 from abc import abstractmethod
 from dataclasses import dataclass
@@ -712,26 +711,6 @@ def _canonicalize_sparse_mla_kv_cache_dtype(
     return kv_cache_dtype
 
 
-class KVarNMLALayerWatch:
-    """Per-layer attention-output checksums for divergence bisection."""
-
-    sums: list = []
-
-    @classmethod
-    def log(cls, layer, out):
-        if isinstance(out, torch.Tensor) and out.numel() > 0:
-            cls.sums.append(
-                (layer, round(float(out.detach().float().abs().sum().item()), 1))
-            )
-
-    @classmethod
-    def flush(cls, tag):
-        with open(f"/tmp/layerwatch_{tag}.jsonl", "a") as f:
-            for layer, s in cls.sums:
-                f.write(json.dumps({"layer": layer, "sum": s}) + "\n")
-        cls.sums = []
-
-
 class MLAAttention(nn.Module, AttentionLayerBase):
     """Multi-Head Latent Attention layer.
 
@@ -1139,20 +1118,6 @@ class MLAAttention(nn.Module, AttentionLayerBase):
         return self._chunked_prefill_workspace_size
 
     def forward(
-        self,
-        q: torch.Tensor,
-        kv_c_normed: torch.Tensor,
-        k_pe: torch.Tensor,
-        output_shape: torch.Size | None = None,
-    ) -> torch.Tensor:
-        _out = self._forward_orig(
-            q, kv_c_normed, k_pe, output_shape
-        )
-        if os.environ.get("KVARN_MLA_LAYER_WATCH", "0") == "1":
-            KVarNMLALayerWatch.log(self.layer_name, _out)
-        return _out
-
-    def _forward_orig(
         self,
         q: torch.Tensor,
         kv_c_normed: torch.Tensor,
