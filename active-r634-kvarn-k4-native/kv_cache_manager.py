@@ -481,14 +481,21 @@ class KVCacheManager:
             if _os.environ.get("KVARN_SCHED_TRACE", "0") == "1":
                 import logging as _lg
 
+                _hit_desc = ",".join(
+                    f"g{i}:{len(bl)}"
+                    for i, bl in enumerate(new_computed_block_list or [])
+                ) or "none"
                 _lg.getLogger(__name__).warning(
                     "KVARN-ALLOC-CHUNK req=%s need_slot=%d to_allocate=%d "
-                    "available=%d wm=%d",
+                    "available=%d wm=%d hits=[%s] computed=%d new_comp=%d",
                     request.request_id,
                     num_tokens_need_slot,
                     num_blocks_to_allocate,
                     available_blocks,
                     watermark_blocks,
+                    _hit_desc,
+                    request.num_computed_tokens,
+                    num_new_computed_tokens,
                 )
             return None
 
