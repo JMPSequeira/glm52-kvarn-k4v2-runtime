@@ -1140,6 +1140,8 @@ def stage_bf16_as_exact_pool_fp8_records(
         zp_offset=0,
         s_row_offset=0,
         rope_offset=0,
+        rope_amax_offset=0,
+        fp8_rope=False,
         num_blocks=0,
         num_pool_slots=0,
         raw_exact=True,
