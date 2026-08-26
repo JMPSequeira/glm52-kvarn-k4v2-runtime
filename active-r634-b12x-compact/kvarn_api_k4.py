@@ -734,6 +734,11 @@ def stage_compact_kvarn_native_history(
     padded_exact_pages: int,
 ) -> None:
     """Pack one rank's live K4 pages and exact overrides into native wire."""
+    import os as _os, logging as _lg
+
+    if _os.environ.get("KVARN_READER_TRACE", "0") == "1":
+        _lg.getLogger(__name__).warning("KVARN-READER stage_compact_kvarn_native_history( fired")
+
     if (
         block_table.dtype != torch.int32
         or block_table.ndim != 2
@@ -970,6 +975,11 @@ def stage_k5_as_fp8_records(
 
     Invalid physical slots leave the corresponding output rows unchanged.
     """
+    import os as _os, logging as _lg
+
+    if _os.environ.get("KVARN_READER_TRACE", "0") == "1":
+        _lg.getLogger(__name__).warning("KVARN-READER stage_k5_as_fp8_records( rows=%%d", physical_slots.numel() if "physical_slots" in dir() else -1)
+
     if physical_slots.ndim != 1 or physical_slots.dtype != torch.int32:
         raise ValueError("physical_slots must be a flat int32 tensor")
     if not physical_slots.is_contiguous():
