@@ -2979,7 +2979,10 @@ class B12xMLASparseImpl(MLAAttentionImpl[B12xMLASparseMetadata]):
         _, inv = self._kvarn_layer_alpha()
         if inv != 1.0:
             out = out * inv
-        if os.environ.get("KVARN_MLA_LAYER_WATCH", "0") == "1":
+        if (
+            os.environ.get("KVARN_MLA_LAYER_WATCH", "0") == "1"
+            and not torch.cuda.is_current_stream_capturing()
+        ):
             import pathlib
 
             with open("/tmp/layerwatch.jsonl", "a") as f:
