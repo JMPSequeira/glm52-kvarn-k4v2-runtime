@@ -662,6 +662,7 @@ exec podman run --rm --pull=never --replace \
   --env KVARN_APC_HIT_LOG="${KVARN_APC_HIT_LOG:-0}" \
   --env KVARN_GAP_FREE_STRIP_HASH="${KVARN_GAP_FREE_STRIP_HASH:-0}" \
   --env KVARN_MLA_RECORD_SERVE="${KVARN_MLA_RECORD_SERVE:-0}" \
+  --env KVARN_MLA_FLUSH_ALL="${KVARN_MLA_FLUSH_ALL:-0}" \
   --env VLLM_USE_B12X_PCIE_DMA=1 \
   --env VLLM_PCIE_ALLREDUCE_BACKEND=b12x \
   --env VLLM_USE_B12X_DCP_A2A=1 \

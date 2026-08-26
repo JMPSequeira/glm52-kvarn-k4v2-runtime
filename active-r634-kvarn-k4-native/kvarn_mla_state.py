@@ -743,12 +743,19 @@ class KVarNMLAStateManager:
                 state.block_fill[block_id] = fill
 
         retired = [block_id for block_id in state.mapping if block_id not in needed]
-        flush_ids = [
-            block_id
-            for block_id in retired
-            if state.block_fill.get(block_id, 0) >= config.group
-            or block_id in state.flushed
-        ]
+        if os.environ.get("KVARN_MLA_FLUSH_ALL", "0") == "1":
+            # Tracker fills resolve asynchronously and lag retirement; the
+            # pool rows are authoritative at retire time. Serialize every
+            # retired block: mid-scatter blocks carry no registered hash and
+            # cannot be hit, so their partial records are never served.
+            flush_ids = list(retired)
+        else:
+            flush_ids = [
+                block_id
+                for block_id in retired
+                if state.block_fill.get(block_id, 0) >= config.group
+                or block_id in state.flushed
+            ]
         for _fb in flush_ids:
             cls._audit.log(_fb, "flush_pack", f"fill={state.block_fill.get(_fb)} st={group_key[-1] if isinstance(group_key, tuple) else group_key}")
         if flush_ids:
