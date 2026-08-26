@@ -114,6 +114,8 @@ def _stage_k5_as_fp8_records_kernel(
     zp_offset: tl.constexpr,
     s_row_offset: tl.constexpr,
     rope_offset: tl.constexpr,
+    rope_amax_offset: tl.constexpr,
+    fp8_rope: tl.constexpr,
     num_blocks,
     num_pool_slots,
     raw_exact: tl.constexpr,
@@ -206,13 +208,29 @@ def _stage_k5_as_fp8_records_kernel(
         if raw_exact:
             rope = tl.load(raw_rope_ptr + row * _TL_K5_ROPE_DIM + rope_dims)
         else:
-            body_rope = tl.load(
-                (record + rope_offset).to(tl.pointer_type(tl.bfloat16))
-                + token * _TL_K5_ROPE_DIM
-                + rope_dims,
-                mask=body,
-                other=0.0,
-            )
+            if fp8_rope:
+                q_rope = tl.load(
+                    (record + rope_offset).to(tl.pointer_type(tl.float8e4nv))
+                    + token * _TL_K5_ROPE_DIM
+                    + rope_dims,
+                    mask=body,
+                    other=0.0,
+                ).to(tl.float32)
+                rope_amax = tl.load(
+                    (record + rope_amax_offset).to(tl.pointer_type(tl.float16))
+                    + token,
+                    mask=body,
+                    other=0.0,
+                ).to(tl.float32)
+                body_rope = q_rope * rope_amax
+            else:
+                body_rope = tl.load(
+                    (record + rope_offset).to(tl.pointer_type(tl.bfloat16))
+                    + token * _TL_K5_ROPE_DIM
+                    + rope_dims,
+                    mask=body,
+                    other=0.0,
+                )
             exact_rope = tl.load(
                 rope_pool_ptr
                 + safe_pool_slot * rope_pool_stride_slot
@@ -957,9 +975,13 @@ def stage_k5_as_fp8_records(
     if not k5_cache.is_contiguous():
         raise ValueError("k5_cache must be contiguous")
     geometry = {
-        18_560: (2, 8_192, 9_216, 10_240, 10_368),
-        26_752: (4, 16_384, 17_408, 18_432, 18_560),
-        30_848: (5, 20_480, 21_504, 22_528, 22_656),
+        # (bits, s_col, zp, s_row, rope, rope_amax, fp8_rope)
+        18_560: (2, 8_192, 9_216, 10_240, 10_368, 14_464, False),
+        26_752: (4, 16_384, 17_408, 18_432, 18_560, 22_656, False),
+        30_848: (5, 20_480, 21_504, 22_528, 22_656, 24_752, False),
+        14_720: (2, 8_192, 9_216, 10_240, 10_368, 14_464, True),
+        22_784: (4, 16_384, 17_408, 18_432, 18_560, 22_656, True),
+        24_880: (5, 20_480, 21_504, 22_528, 22_656, 24_752, True),
     }.get(k5_cache.stride(0))
     if geometry is None:
         raise ValueError(
@@ -1045,6 +1067,8 @@ def stage_k5_as_fp8_records(
         zp_offset=geometry[2],
         s_row_offset=geometry[3],
         rope_offset=geometry[4],
+        rope_amax_offset=geometry[5],
+        fp8_rope=geometry[6],
         num_blocks=k5_cache.shape[0],
         num_pool_slots=latent_pool.shape[0],
         raw_exact=False,
