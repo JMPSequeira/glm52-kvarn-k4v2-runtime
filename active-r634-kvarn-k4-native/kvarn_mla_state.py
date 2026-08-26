@@ -535,6 +535,14 @@ class KVarNMLALiveBlockTracker:
                 self.epoch_owners[epoch_id] = req_id
                 self.latest_epoch[req_id] = epoch_id
 
+    def block_owners(self, group_id: int) -> dict[int, str]:
+        """Current owning request per block (first live owner wins)."""
+        owners: dict[int, str] = {}
+        for req_id, groups in self.request_blocks.items():
+            for b in groups.get(group_id, {}):
+                owners.setdefault(b, req_id)
+        return owners
+
     def block_fills(self, group_id: int) -> dict[int, int | None]:
         sources = [self.step_blocks.get(group_id, {})]
         sources.extend(
