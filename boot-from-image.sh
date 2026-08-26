@@ -611,6 +611,7 @@ exec podman run --rm --pull=never --replace \
   --volume "$SRC/active-r634-b12x-compact/kv_cache_utils.py:/opt/venv/lib/python3.12/site-packages/vllm/v1/core/kv_cache_utils.py" \
   --volume /home/js/projects/optimize-vllm/vllm/v1/kv_cache_interface.py:/opt/venv/lib/python3.12/site-packages/vllm/v1/kv_cache_interface.py \
   --volume /home/js/projects/optimize-vllm/vllm/v1/core/kv_cache_coordinator.py:/opt/venv/lib/python3.12/site-packages/vllm/v1/core/kv_cache_coordinator.py \
+  --volume /home/js/projects/optimize-vllm/vllm/v1/core/sched/scheduler.py:/opt/venv/lib/python3.12/site-packages/vllm/v1/core/sched/scheduler.py \
   --volume /home/js/projects/optimize-vllm/vllm/v1/worker/utils.py:/opt/venv/lib/python3.12/site-packages/vllm/v1/worker/utils.py \
   --network host --ipc host --security-opt label=disable \
   --pids-limit 4096 \
