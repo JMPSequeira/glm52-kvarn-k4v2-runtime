@@ -9,6 +9,7 @@ from cutlass._mlir.dialects import llvm
 
 from sparkinfer._lib.intrinsics import (
     f16x2_to_f32x2,
+    cvt_bf16x2_to_f16x2,
     fp8x4_e4m3_to_bfloat2x2,
     get_ptr_as_int64,
     ld_global_b16,
@@ -107,6 +108,8 @@ def io_issue_kvarn_k5_gather(
     zp_offset: cutlass.Constexpr = _K5_ZP_OFFSET,
     s_row_offset: cutlass.Constexpr = _K5_S_ROW_OFFSET,
     rope_offset: cutlass.Constexpr = _K5_ROPE_OFFSET,
+    rope_amax_offset: cutlass.Constexpr = 0,
+    fp8_rope: cutlass.Constexpr = False,
     exact_fp8: cutlass.Constexpr = False,
     exact_pool_only: cutlass.Constexpr = False,
     exact_fast_io: cutlass.Constexpr = False,
@@ -411,7 +414,46 @@ def io_issue_kvarn_k5_gather(
                     + entry * Int32(rope_smem_stride * 2)
                     + dim * Int32(2)
                 )
-                if packed:
+                if cutlass.const_expr(fp8_rope):
+                    if packed:
+                        raw = ld_global_nc_u32(
+                            get_ptr_as_int64(
+                                cache_u8,
+                                base
+                                + Int64(rope_offset)
+                                + token.to(Int64) * Int64(_ROPE_DIM)
+                                + dim.to(Int64),
+                            )
+                        )
+                        amax_raw = ld_global_nc_u32(
+                            get_ptr_as_int64(
+                                cache_u8,
+                                base
+                                + Int64(rope_amax_offset)
+                                + token.to(Int64) * Int64(2),
+                            )
+                        )
+                        amax_lo, _amax_hi = f16x2_to_f32x2(amax_raw)
+                        bf0, bf1 = fp8x4_e4m3_to_bfloat2x2(raw)
+                        f0, f1 = f16x2_to_f32x2(cvt_bf16x2_to_f16x2(bf0))
+                        f2, f3 = f16x2_to_f32x2(cvt_bf16x2_to_f16x2(bf1))
+                        st_shared_bf16_from_f32(dst, f0 * amax_lo)
+                        st_shared_bf16_from_f32(dst + Int32(2), f1 * amax_lo)
+                        st_shared_bf16_from_f32(dst + Int32(4), f2 * amax_lo)
+                        st_shared_bf16_from_f32(dst + Int32(6), f3 * amax_lo)
+                    elif exact:
+                        exact_rope_offset = (
+                            (pool_slot.to(Int64) * Int64(_GROUP) + token.to(Int64))
+                            * Int64(_ROPE_DIM)
+                            + dim.to(Int64)
+                        )
+                        bits = ld_global_nc_u32(
+                            get_ptr_as_int64(rope_pool, exact_rope_offset)
+                        )
+                        st_shared_u32(dst, bits)
+                    else:
+                        st_shared_u32(dst, Uint32(0))
+                elif packed:
                     bits = ld_global_nc_u32(
                         get_ptr_as_int64(
                             cache_u8,

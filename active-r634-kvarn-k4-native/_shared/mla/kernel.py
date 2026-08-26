@@ -151,6 +151,20 @@ _KVARN_PACKED_TILE_GEOMETRY: dict[int, tuple[int, int, int, int, int]] = {
     5: (30_848, 20_480, 21_504, 22_528, 22_656),
 }
 
+# fp8-RoPE record variants: (stride, s_col, zp, s_row, rope, rope_amax).
+# Latent layout is unchanged; the RoPE section halves (E4M3 + fp16 amax).
+_KVARN_PACKED_TILE_GEOMETRY_FP8: dict[int, tuple[int, ...]] = {
+    2: (14_592, 8_192, 9_216, 10_240, 10_368, 14_464),
+    4: (22_784, 16_384, 17_408, 18_432, 18_560, 22_656),
+    5: (26_880, 20_480, 21_504, 22_528, 22_656, 24_752),
+}
+
+
+def _kvarn_fp8_rope_enabled() -> bool:
+    import os
+
+    return os.environ.get("KVARN_FP8_ROPE_RECORD", "0") == "1"
+
 # Observability: the most recent decode split plan (read by benchmarks / the
 # P9c AutoTuner sweep to report num_splits_used). Pure side-channel -- does NOT
 # affect numerics or the launch. Keys are informational.
@@ -1881,15 +1895,28 @@ class UnifiedDecodeKernel:
                     if g_end > section_len:
                         g_end = section_len
                     if cutlass.const_expr(self.native_kvarn):
-                        (
-                            cache_block_stride,
-                            s_col_off,
-                            zp_off,
-                            s_row_off,
-                            rope_off,
-                        ) = _KVARN_PACKED_TILE_GEOMETRY[
-                            self.native_kvarn_bits
-                        ]
+                        if _kvarn_fp8_rope_enabled():
+                            (
+                                cache_block_stride,
+                                s_col_off,
+                                zp_off,
+                                s_row_off,
+                                rope_off,
+                                rope_amax_off,
+                            ) = _KVARN_PACKED_TILE_GEOMETRY_FP8[
+                                self.native_kvarn_bits
+                            ]
+                        else:
+                            (
+                                cache_block_stride,
+                                s_col_off,
+                                zp_off,
+                                s_row_off,
+                                rope_off,
+                            ) = _KVARN_PACKED_TILE_GEOMETRY[
+                                self.native_kvarn_bits
+                            ]
+                            rope_amax_off = 0
                         io_issue_kvarn_k5_gather(
                             kv_cache_u8, topk_row, block_to_pool_slot,
                             latent_pool, rope_pool,
@@ -1905,6 +1932,8 @@ class UnifiedDecodeKernel:
                             zp_offset=zp_off,
                             s_row_offset=s_row_off,
                             rope_offset=rope_off,
+                            rope_amax_offset=rope_amax_off,
+                            fp8_rope=_kvarn_fp8_rope_enabled(),
                             kv_smem_stride=staged_kv_stride,
                             rope_smem_stride=t.d_rope,
                             io_threads=self.io_threads,
@@ -2965,7 +2994,17 @@ def _kvarn_mla_decode_grid_flat_launch(
             "native KVarN decode requires packed_bits in "
             f"{sorted(_KVARN_PACKED_TILE_GEOMETRY)}"
         )
-    cache_block_stride = _KVARN_PACKED_TILE_GEOMETRY[packed_bits][0]
+    _geo_table = (
+        _KVARN_PACKED_TILE_GEOMETRY_FP8
+        if _kvarn_fp8_rope_enabled()
+        else _KVARN_PACKED_TILE_GEOMETRY
+    )
+    if packed_bits not in _geo_table:
+        raise ValueError(
+            "native KVarN decode requires packed_bits in "
+            f"{sorted(_geo_table)}"
+        )
+    cache_block_stride = _geo_table[packed_bits][0]
     kvarn_exact_fast_io = bool(
         exact_pool_only and not exact_h16 and _env_kvarn_exact_fast_io_enabled()
     )
